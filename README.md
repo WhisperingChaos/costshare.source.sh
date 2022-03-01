@@ -17,4 +17,4 @@ Another method exists that implements a [SOLID](https://github.com/WhisperingCha
 
 ### Dependencies
 #### bash version ```GNU bash, version 4.3.48(1)-release```
-This component uses bash [nameref/name reference](https://www.gnu.org/software/bash/manual/html_node/Shell-Parameters.html) feature introduced in version 4.3.  When first released, a [circular reference](https://unix.stackexchange.com/questions/302578/circular-name-references-in-bash-shell-function-but-not-in-ksh) issue surfaced that would cause this script to fail.  However, this issue doesn't exist, in at least, **.48(1)**.
+This component uses bash [nameref/name reference](https://www.gnu.org/software/bash/manual/html_node/Shell-Parameters.html) feature introduced in version 4.3.
