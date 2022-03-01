@@ -10,14 +10,54 @@ compose_executable(){
   done
 }
 
-test_costshare__vendor_pct_tbl_normalize(){
-  costshare_vendor_pct_tbl_two_vendors_stripwhitespace
-  costshare_vendor_pct_tbl|costshare__vendor_pct_tbl_normalize
+test_costshare__error_msg(){
+
+  local -i errorCnt=0
+  assert_output_true \
+    echo "Error: message to print. rowCnt=1 row='entry content'" \
+    --- \
+    costshare__error_msg errorCnt 'row' 1 'entry content' 'message to print'
+
+  errorCnt=0
+  costshare__error_msg errorCnt 'row' 1 'entry content' 'message to print' 2>/dev/null
+  assert_true '[[ $errorCnt -eq 1 ]]'
+
+  assert_output_true \
+    test_costshare__error_msg_threshold_expected \
+    --- \
+    test_costshare__error_msg_threshold_exit
+}
+test_costshare__error_msg_threshold_exit()(
+
+   errorCnt=$costshare_ERROR_THRESHOLD_STOP
+   costshare__error_msg errorCnt 'row' 1 'entry content' 'message to print'
+ 
+  # exceeding the threshold should exit this child
+  # process before executing this assert.  if it does
+  # the assert should fail generating unexpected
+  # output that should be detected by the 
+  # calling assert_output_true function.
+  assert_true false
+  assert_return_code_set
+)
+test_costshare__error_msg_threshold_expected(){
+  cat <<'test_costshare__error_msg_threshold_expected_output'
+Error: message to print. rowCnt=1 row='entry content'
+Abort: Number of errors detected exceeeds
+ + costshare_ERROR_THRESHOLD_STOP=10.
+ + Repair these errors to continue.
+test_costshare__error_msg_threshold_expected_output
 }
 
 
-
-test_costshare_vendor_pct_tbl_two_vendors_stripwhitespace(){
+test_costshare_vendor_pct_tbl_normalize(){
+  test_costshare_vendor_pct_tbl_names_with_whitespace_special_characters
+  assert_output_true
+    costshare_vendor_pct_tbl_expected \
+    --- \
+    costshare_vendor_pct_tbl_normalize
+}
+test_costshare_vendor_pct_tbl_names_with_whitespace_special_characters(){
 costshare_vendor_pct_tbl(){
 cat <<'costshare_vendor_pct_tbl'
    Root1 Vendor,  20
@@ -29,7 +69,7 @@ Root6 ~ ! # $ % ^ & ( ) _ - + = ] [ | \ " ' | ? . / < > $s * : end,60
 costshare_vendor_pct_tbl
 # * $ not valid
 }
-costshare_vendor_pct_tbl_expecte(){
+costshare_vendor_pct_tbl_expected(){
 cat <<'costshare_vendor_pct_tbl_result'
 Root1 Vendor,20
 Root2 Vendor,30
@@ -190,9 +230,12 @@ test_costshare__vendor_pct_map_create_output_1
 
 main(){
   compose_executable "$0"
+  test_costshare__error_msg
   test_costshare__embedded_whitespace_replace
   test_costshare__purchase_REGEX
-  test_costshare__vendor_pct_tbl_normalize
+  test_costshare_vendor_pct_tbl_normalize
+
+  assert_return_code_set
 return
   test_costshare__vendor_pct_map_create
 }

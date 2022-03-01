@@ -187,11 +187,11 @@ costshare__vendor_pct_tbl_normalize(){
   local vendorName
   local -i pct=0
   local -i rowCnt=0
-  local -i _errorCnt=0
+  local -i errorCnt=0
   while read -r row; do
     (( rowCnt++ ))
     if ! [[ $row =~ $costshare__VENDOR_PCT_TABLE_REGEX ]]; then
-      costshare__error_msg "$_errorCnt" _errorCnt "row" "$rowCnt" "$row" "fails format check regexVerify='$regexVerify'"
+      costshare__error_msg errorCnt "row" "$rowCnt" "$row" "fails format check regexVerify='$regexVerify'"
       continue
     fi
 
@@ -199,19 +199,19 @@ costshare__vendor_pct_tbl_normalize(){
     pct=${BASH_REMATCH[2]}
 
     if [[ $pct -gt 100 ]]; then
-      costshare__error_msg "$_errorCnt" _errorCnt "row" "$rowCnt" "$row" "pct=$pct must be =< 100'"
+      costshare__error_msg errorCnt "row" "$rowCnt" "$row" "pct=$pct must be =< 100'"
       continue
     fi
 
     if ! [[ $vendorName =~ $costshare__VENDOR_NAME_TRIM_REGEX ]]; then
-      costshare__error_msg "$_errorCnt" _errorCnt "row" "$rowCnt" "$row"  "vendor name fails costshare__VENDOR_NAME_TRIM_REGEX='$costshare__VENDOR_NAME_TRIM_REGEX'"
+      costshare__error_msg errorCnt "row" "$rowCnt" "$row"  "vendor name fails costshare__VENDOR_NAME_TRIM_REGEX='$costshare__VENDOR_NAME_TRIM_REGEX'"
       continue
     fi
 
     vendorName=${BASH_REMATCH[1]}
 
     if [[ ${#vendorName} -gt $costshare_VENDOR_NAME_LENGTH_MAX ]]; then
-      costshare__error_msg "$_errorCnt" _errorCnt "row" "$rowCnt" "$row"  "vendor name exceeds costshare_VENDOR_NAME_LENGTH_MAX=$costshare_VENDOR_NAME_LENGTH_MAX . Either override length or truncate vendor name."
+      costshare__error_msg errorCnt "row" "$rowCnt" "$row"  "vendor name exceeds costshare_VENDOR_NAME_LENGTH_MAX=$costshare_VENDOR_NAME_LENGTH_MAX . Either override length or truncate vendor name."
       continue
     fi
 
@@ -346,11 +346,11 @@ costshare__purchase_stream_normalize(){
   local forwardFields
   local chargeNumStart
   local -i purchaseCnt=0
-  local -i _errorCnt=0
+  local -i errorCnt=0
   while read -r purchase; do
 
     if ! [[ $purchase =~ $costshare__PURCHASE_DATA_FORMAT_REGEX ]]; then
-      costshare__error_msg "$_errorCnt" _errorCnt "purchase" "$purchaseCnt" "$purchase" "failed to match expected format.  costshare__PURCHASE_DATA_FORMAT_REGEX='$costshare__PURCHASE_DATA_FORMAT_REGEX'"
+      costshare__error_msg errorCnt "purchase" "$purchaseCnt" "$purchase" "failed to match expected format.  costshare__PURCHASE_DATA_FORMAT_REGEX='$costshare__PURCHASE_DATA_FORMAT_REGEX'"
       continue
     fi
 
@@ -360,14 +360,14 @@ costshare__purchase_stream_normalize(){
     forwardFields="${BASE_REMATCH[$costshare__PURCHASE_FORWARD_IDX]}"
 
     if ! [[ $vendorName =~ $costshare__VENDOR_NAME_TRIM_REGEX ]]; then
-      costshare__error_msg "$_errorCnt" _errorCnt "purchase" "$purchaseCnt" "$purchase"  "vendor name fails costshare__VENDOR_NAME_TRIM_REGEX='$costshare__VENDOR_NAME_TRIM_REGEX'"
+      costshare__error_msg errorCnt "purchase" "$purchaseCnt" "$purchase"  "vendor name fails costshare__VENDOR_NAME_TRIM_REGEX='$costshare__VENDOR_NAME_TRIM_REGEX'"
       continue
     fi
 
     vendorName=${BASH_REMATCH[1]}
 
     if [[ ${#vendorName} -gt $costshare_VENDOR_NAME_LENGTH_MAX ]]; then
-      costshare__error_msg "$_errorCnt" _errorCnt "purchase" "$purchaseCnt" "$purchase"  "vendor name exceeds costshare_VENDOR_NAME_LENGTH_MAX=$costshare_VENDOR_NAME_LENGTH_MAX . Either override length or truncate vendor name."
+      costshare__error_msg errorCnt "purchase" "$purchaseCnt" "$purchase"  "vendor name exceeds costshare_VENDOR_NAME_LENGTH_MAX=$costshare_VENDOR_NAME_LENGTH_MAX . Either override length or truncate vendor name."
       continue
     fi
 
@@ -376,7 +376,7 @@ costshare__purchase_stream_normalize(){
 tart=1; fi
     if [[ "${charge:$chargeNumStart:1}"   == "0" ]] \
     && [[ "${charge:$chargeNumStart+1:1}" != "." ]]; then
-      costshare__error_msg "$_errorCnt" _errorCnt "purchase" "$purchaseCnt" "$purchase"  "Charges cannot start with '0' when charge/refund greater than 0.99."
+      costshare__error_msg errorCnt "purchase" "$purchaseCnt" "$purchase"  "Charges cannot start with '0' when charge/refund greater than 0.99."
       continue
     fi
 
@@ -472,20 +472,18 @@ costshare__charge_share_pct_get(){
 }
 
 costshare__error_msg(){
-  local errorCnt=$1
-  local -n -r errorCntRtn=$2
-  local -r entryType="$3"
-  local -r entryCnt=$4
-  local -r entryContent="$5"
-  local -r msg="$6"
+  local -n errorCntRTN=$1
+  local -r entryType="$2"
+  local -r entryCnt=$3
+  local -r entryContent="$4"
+  local -r msg="$5"
 
-  (( errorCnt++ ))
+  (( errorCntRTN++ ))
   echo "Error: ${msg}. ${entryType}Cnt=$entryCnt ${entryType}='$entryContent'">&2
-  if [[ $errorCnt -lt $costshare_ERROR_THRESHOLD_STOP ]]; then
-    errorCntRtn=$errorCnt
+  if [[ $errorCntRTN -lt $costshare_ERROR_THRESHOLD_STOP ]]; then
     return
   fi
- abort "Amount of errors detected in exceeeds
+ abort "Number of errors detected exceeeds
  + costshare_ERROR_THRESHOLD_STOP=$costshare_ERROR_THRESHOLD_STOP.
  + Repair these errors to continue." 
 }   
