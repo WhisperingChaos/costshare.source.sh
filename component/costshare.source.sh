@@ -127,7 +127,8 @@ costshare_charge_share_run(){
 ##    STDOUT - verified and normalized rows of the costshare_vendor_pct_tbl
 ###############################################################################
 costshare_vendor_pct_tbl_normalize(){
-  costshare_vendor_pct_tbl | costshare__vendor_pct_tbl_normalize
+  costshare_vendor_pct_tbl \
+  | costshare__vendor_pct_tbl_normalize
 }
 ###############################################################################
 ##
@@ -148,7 +149,8 @@ costshare_vendor_pct_tbl_normalize(){
 ###############################################################################
 costshare_vendor_filter_regex(){
 
-  costshare_vendor_pct_tbl_normalize | awk 'BEGIN { FS = "," } ; { printf("%s%s",$1,"|")}'
+  costshare_vendor_pct_tbl_normalize \
+  | awk 'BEGIN { FS = "," } ; { printf("%s%s",$1,"|")}'
   # eliminaes the code needed to remove last 'or'. 
   echo DoesNotMatchAnyVendor
 }
@@ -191,7 +193,7 @@ costshare__vendor_pct_tbl_normalize(){
   while read -r row; do
     (( rowCnt++ ))
     if ! [[ $row =~ $costshare__VENDOR_PCT_TABLE_REGEX ]]; then
-      costshare__error_msg errorCnt "row" "$rowCnt" "$row" "fails format check regexVerify='$regexVerify'"
+      costshare__error_msg errorCnt "row" "$rowCnt" "$row" "fails format check costshare__VENDOR_PCT_TABLE_REGEX='$costshare__VENDOR_PCT_TABLE_REGEX'"
       continue
     fi
 
@@ -211,7 +213,7 @@ costshare__vendor_pct_tbl_normalize(){
     vendorName=${BASH_REMATCH[1]}
 
     if [[ ${#vendorName} -gt $costshare_VENDOR_NAME_LENGTH_MAX ]]; then
-      costshare__error_msg errorCnt "row" "$rowCnt" "$row"  "vendor name exceeds costshare_VENDOR_NAME_LENGTH_MAX=$costshare_VENDOR_NAME_LENGTH_MAX . Either override length or truncate vendor name."
+      costshare__error_msg errorCnt "row" "$rowCnt" "$row"  "vendor name exceeds costshare_VENDOR_NAME_LENGTH_MAX=$costshare_VENDOR_NAME_LENGTH_MAX. Either override length or truncate vendor name"
       continue
     fi
 
@@ -239,7 +241,8 @@ costshare__vendor_pct_tbl_normalize(){
 ##             while its value is Party 'X''s percentage.
 ###############################################################################
 costshare__vendor_pct_map_create(){
-  costshare_vendor_pct_tbl_normalize | awk 'BEGIN { FS = ","; print "(" } ; { print "[\""$1"\"]" "=" "\""$2"\""}; END { print ")" }'
+  costshare_vendor_pct_tbl_normalize \
+  | awk 'BEGIN { FS = ","; print "(" } ; { print "[\""$1"\"]" "=" "\""$2"\""}; END { print ")" }'
 }
 ###############################################################################
 ##
@@ -269,7 +272,8 @@ costshare__vendor_pct_map_create(){
 ##             Stream begins with "(" and ends with ")"   
 ###############################################################################
 costshare__vendor_name_length_map_create(){
-  costshare_vendor_pct_tbl_normalize | costshare__vendor_name_length_map
+  costshare_vendor_pct_tbl_normalize \
+  | costshare__vendor_name_length_map
 }
 
 costshare__vendor_name_length_map(){
@@ -278,7 +282,7 @@ costshare__vendor_name_length_map(){
   local -A nameLenMap
   local lenEncoding
   local vendorName
-  while read line; do
+  while read -r line; do
     vendorName=${line%%,*}
     nameLen=${#vendorName}
     if [[ $nameLen -lt 3 ]]; then
@@ -295,23 +299,30 @@ costshare__vendor_name_length_map(){
 }
 
 costshare__vendor_pct_name_encoding_ordering(){
-  local -r lenEncodingNewRtn=$1
+  local -n lenEncodingNewRtn=$1
   local -i -r newLen=$2
 
   shift 2
-  local _lenEncodingNew
+  lenEncodingNewRtn=""
+  local -i dupLenSkip=0
   while [[ $# -gt 0 ]]; do
+    if [[ $newLen -eq $1 ]]; then
+      # length already included
+      dupLenSkip=1
+      break
+    fi
     if [[ $newLen -gt $1 ]]; then
       break
     fi
-    _lenEncodingNew+=" $1"
+    lenEncodingNewRtn+=" $1"
     shift
   done
-  _lenEncodingNew+=" $newLen"
-  if [[ $# -gt 0 ]]; then
-    _lenEncodingNew+=" ""$@"
+  if [[ $dupLenSkip == 0 ]]; then 
+    lenEncodingNewRtn+=" $newLen"
   fi
-  eval $lenEncodingNewRtn\=\$\_lenEncodingNew
+  if [[ $# -gt 0 ]]; then
+    lenEncodingNewRtn+=" ""$@"
+  fi
 }
 
 # require at least MM/DD but allow for MM/DD/YY or YYYY. date is not processed by
@@ -367,7 +378,7 @@ costshare__purchase_stream_normalize(){
     vendorName=${BASH_REMATCH[1]}
 
     if [[ ${#vendorName} -gt $costshare_VENDOR_NAME_LENGTH_MAX ]]; then
-      costshare__error_msg errorCnt "purchase" "$purchaseCnt" "$purchase"  "vendor name exceeds costshare_VENDOR_NAME_LENGTH_MAX=$costshare_VENDOR_NAME_LENGTH_MAX . Either override length or truncate vendor name."
+      costshare__error_msg errorCnt "purchase" "$purchaseCnt" "$purchase"  "vendor name exceeds costshare_VENDOR_NAME_LENGTH_MAX=$costshare_VENDOR_NAME_LENGTH_MAX . Either override length or truncate vendor name"
       continue
     fi
 
@@ -388,7 +399,6 @@ tart=1; fi
 
   done
 }
-
 
 costshare__embedded_whitespace_replace(){
   local stringIn=$1
