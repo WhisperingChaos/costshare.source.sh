@@ -10,6 +10,7 @@ compose_executable(){
   done
 }
 
+
 test_costshare__error_msg(){
 
   local -i errorCnt=0
@@ -51,11 +52,13 @@ test_costshare__error_msg_threshold_expected_output
 
 
 test_costshare_vendor_pct_tbl_normalize(){
+
   test_costshare_vendor_pct_tbl_names_with_whitespace_special_characters
-  assert_output_true
-    costshare_vendor_pct_tbl_expected \
+  assert_output_true \
+    test_costshare_vendor_pct_tbl_expected \
     --- \
     costshare_vendor_pct_tbl_normalize
+
 }
 test_costshare_vendor_pct_tbl_names_with_whitespace_special_characters(){
 costshare_vendor_pct_tbl(){
@@ -67,9 +70,8 @@ Root4		Vendor,40
 Root5		Vendor    part1 part2  part3 4,50
 Root6 ~ ! # $ % ^ & ( ) _ - + = ] [ | \ " ' | ? . / < > $s * : end,60
 costshare_vendor_pct_tbl
-# * $ not valid
 }
-costshare_vendor_pct_tbl_expected(){
+test_costshare_vendor_pct_tbl_expected(){
 cat <<'costshare_vendor_pct_tbl_result'
 Root1 Vendor,20
 Root2 Vendor,30
@@ -80,6 +82,7 @@ Root6 ~ ! # $ % ^ & ( ) _ - + = ] [ | \ " ' | ? . / < > $s * : end,60
 costshare_vendor_pct_tbl_result
 }
 }
+
 test_costshare__purchase_REGEX(){
 
 # MM/DD
@@ -211,13 +214,15 @@ test_costshare__embedded_whitespace_replace(){
   assert_true '[[ "$result" == "abcd" ]]'
 }
 
-
 test_costshare__vendor_pct_map_create(){
   costshare_vendor_pct_tbl(){
     echo 1Root Vendor,20
     echo 2Root Vendor,30
   }
-  assert_output_true test_costshare__vendor_pct_map_create_output_1 --- costshare__vendor_pct_map_create
+  assert_output_true \
+    test_costshare__vendor_pct_map_create_output_1 \
+    --- \
+   costshare__vendor_pct_map_create
 }
 test_costshare__vendor_pct_map_create_output_1(){
 cat <<test_costshare__vendor_pct_map_create_output_1
@@ -228,16 +233,117 @@ cat <<test_costshare__vendor_pct_map_create_output_1
 test_costshare__vendor_pct_map_create_output_1
 }
 
+
+test_costshare__vendor_pct_name_encoding_ordering(){
+
+  local lenEncodingNew
+
+  costshare__vendor_pct_name_encoding_ordering lenEncodingNew 1
+  assert_true '[[ "$lenEncodingNew" == " 1" ]]'
+
+  costshare__vendor_pct_name_encoding_ordering lenEncodingNew 5 $lenEncodingNew
+  assert_true '[[ "$lenEncodingNew" == " 5 1" ]]'
+
+  costshare__vendor_pct_name_encoding_ordering lenEncodingNew 4 $lenEncodingNew
+  assert_true '[[ "$lenEncodingNew" == " 5 4 1" ]]'
+
+  costshare__vendor_pct_name_encoding_ordering lenEncodingNew 4 $lenEncodingNew
+  assert_true '[[ "$lenEncodingNew" == " 5 4 1" ]]'
+
+  costshare__vendor_pct_name_encoding_ordering lenEncodingNew 6 $lenEncodingNew
+  assert_true '[[ "$lenEncodingNew" == " 6 5 4 1" ]]'
+
+  costshare__vendor_pct_name_encoding_ordering lenEncodingNew 3 $lenEncodingNew
+  assert_true '[[ "$lenEncodingNew" == " 6 5 4 3 1" ]]'
+}
+
+
+test_costshare__vendor_name_length_map(){
+
+  assert_output_true \
+    echo "'"'([Root1]=" 13" [Root2]=" 14" [Root3]=" 15" [Root4]=" 14" [Root5]=" 32" [Root6]=" 66" )'"'" \
+    --- \
+    test_costshare_pipe
+}
+test_costshare_vendor_pct_tbl_vendor_name_length_map(){
+cat <<'test_costshare_vendor_pct_tbl_vendor_name_length_map'
+Root1 !Vendor,20
+Root2 Ve**ndor,30
+Root2 Ve++ndor,30
+Root3 Ven$$$dor,40
+Root4 Ven[dor],40
+Root5 Vendor part1 part2 part3 4,50
+Root6 ~ ! # $ % ^ & ( ) _ - + = ] [ | \ " ' | ? . / < > $s * : end,60
+test_costshare_vendor_pct_tbl_vendor_name_length_map
+}
+test_costshare_pipe(){
+  test_costshare_vendor_pct_tbl_vendor_name_length_map | costshare__vendor_name_length_map
+}
+
+test_costshare__vendor_pct_tbl_normalize(){
+
+  assert_true 'echo "field1,field2,field3"
+   | costshare__vendor_pct_tbl_normalize 2>&1
+   | assert_output_true test_costshare__vendor_pct_tbl_normalize_fail_regex'
+
+  assert_true 'echo "vendor,101"
+   | costshare__vendor_pct_tbl_normalize 2>&1
+   | assert_output_true test_costshare__vendor_pct_tbl_normalize_fail_pct_le_100'
+
+  assert_true 'echo "ve ndor,1"
+   | costshare__vendor_pct_tbl_normalize 2>&1
+   | assert_output_true test_costshare__vendor_pct_tbl_normalize_fail_trim_regex'
+
+  assert_true 'test_costshare__vendor_pct_tbl_normalize_fail_vendor_max_len_input
+   | costshare__vendor_pct_tbl_normalize 2>&1
+   | assert_output_true test_costshare__vendor_pct_tbl_normalize_fail_vendor_max_len'
+
+}
+test_costshare__vendor_pct_tbl_normalize_fail_regex(){
+cat<<'error'
+Error: fails format check costshare__VENDOR_PCT_TABLE_REGEX='^([^,]+),[[:space:]]*([1-9][0-9]?[0-9]?)[[:space:]]*$'. rowCnt=1 row='field1,field2,field3'
+Abort: Rows of costshare_vendor_pct_tbl don't comply with expected format. errorCnt=1
+error
+}
+test_costshare__vendor_pct_tbl_normalize_fail_pct_le_100(){
+cat<<'error'
+Error: pct=101 must be =< 100'. rowCnt=1 row='vendor,101'
+Abort: Rows of costshare_vendor_pct_tbl don't comply with expected format. errorCnt=1
+error
+}
+test_costshare__vendor_pct_tbl_normalize_fail_trim_regex(){
+cat<<'error'
+Error: vendor name fails costshare__VENDOR_NAME_TRIM_REGEX='^[[:space:]]*([^[:space:]][^[:space:]][^[:space:]]+([[:space:]]+[^[:space:]]+)*)[[:space:]]*$'. rowCnt=1 row='ve ndor,1'
+Abort: Rows of costshare_vendor_pct_tbl don't comply with expected format. errorCnt=1
+error
+}
+
+test_costshare__vendor_pct_tbl_normalize_fail_vendor_max_len_input(){
+cat<<'input'
+012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567,1
+input
+}
+test_costshare__vendor_pct_tbl_normalize_fail_vendor_max_len(){
+cat<<'error'
+Error: vendor name exceeds costshare_VENDOR_NAME_LENGTH_MAX=256. Either override length or truncate vendor name. rowCnt=1 row='012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567,1'
+Abort: Rows of costshare_vendor_pct_tbl don't comply with expected format. errorCnt=1
+error
+}
+
+
 main(){
   compose_executable "$0"
+
   test_costshare__error_msg
   test_costshare__embedded_whitespace_replace
-  test_costshare__purchase_REGEX
   test_costshare_vendor_pct_tbl_normalize
+  test_costshare__purchase_REGEX
+  test_costshare__vendor_pct_map_create
+  test_costshare__vendor_pct_name_encoding_ordering
+  test_costshare__vendor_name_length_map
+  test_costshare__vendor_pct_tbl_normalize
 
   assert_return_code_set
-return
-  test_costshare__vendor_pct_map_create
 }
 
 main
