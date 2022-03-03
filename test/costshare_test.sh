@@ -435,11 +435,65 @@ costshare_vendor_pct_tbl
 }
 }
 
+
+test_costshare__charge_share_compute(){
+  test_costshare__charge_share_compute_vendor_pct_tbl
+  assert_true '
+    echo "fail,regex,"
+    | costshare__charge_share_compute 2>&1
+    | assert_output_true test_costshare__charge_share_compute_fail_Regex'
+  assert_true '
+    echo "10/10,fail vendor name,50.95"
+    | costshare__charge_share_compute 2>&1
+    | assert_output_true test_costshare__charge_share_compute_fail_vendor_name'
+  assert_true '
+    echo "10/10,BJS PARTYX,35.35"
+    | costshare__charge_share_compute 2>&1
+    | assert_output_true echo "10/10,BJS PARTYX,35.35,100,35.35,0.00"'
+  assert_true '
+    echo "10/10,BJS Warehouse,33.34"
+    | costshare__charge_share_compute 2>&1
+    | assert_output_true echo "10/10,BJS Warehouse,33.34,20,6.67,26.67"'
+  assert_true '
+    echo "10/10,BJS fail,33.34"
+    | costshare__charge_share_compute 2>&1
+    | assert_output_true echo "Abort: Failed to find vendorName="'"\'BJS fail\'"'" in vendor_pct_table."'
+  assert_true '
+    echo "10/10,BJS Warehouse,33.34ForwardedFields"
+    | costshare__charge_share_compute 2>&1
+    | assert_output_true echo "10/10,BJS Warehouse,33.34,20,6.67,26.67ForwardedFields"'
+  assert_true '
+    echo "10/10,BJS Warehouse,33.34,ForwardedFields"
+    | costshare__charge_share_compute 2>&1
+    | assert_output_true echo "10/10,BJS Warehouse,33.34,20,6.67,26.67,ForwardedFields"'
+  assert_true '
+    echo "10/10,BJS Warehouse,-33.34,ForwardedFields"
+    | costshare__charge_share_compute 2>&1
+    | assert_output_true echo "10/10,BJS Warehouse,-33.34,20,-6.67,-26.67,ForwardedFields"'
+}
+test_costshare__charge_share_compute_vendor_pct_tbl(){
+costshare_vendor_pct_tbl(){
+cat <<'costshare_vendor_pct_tbl'
+BJS Warehouse, 20
+BJS Gas      , 50
+110 Grill    , 29
+BJS PARTYX   , 100
+costshare_vendor_pct_tbl
+}
+}
+test_costshare__charge_share_compute_fail_Regex(){
+cat <<'error'
+Abort: Purchase data fails costshare__PURCHASE_DATA_FORMAT_REGEX='^([0-1][0-9]/[0-3][0-9](/[0-9][0-9]([0-9][0-9])?)?),([^,]+),([-]?[0-9]+(\.[0-9][0-9])?)(.*)$'purchase='fail,regex,'
+error
+}
+test_costshare__charge_share_compute_fail_vendor_name(){
+cat <<'error'
+Abort: Could not determine vendorSubtypeLens for vendorRoot='fail'
+error
+}
+
 main(){
   compose_executable "$0"
-
-test_costshare__charge_share_pct_get
-return
 
   test_costshare__error_msg
   test_costshare__embedded_whitespace_replace
@@ -450,6 +504,8 @@ return
   test_costshare__vendor_name_length_map
   test_costshare__vendor_pct_tbl_normalize
   test_costshare__purchase_stream_normalize
+  test_costshare__charge_share_pct_get
+  test_costshare__charge_share_compute
 
   assert_return_code_set
 }
