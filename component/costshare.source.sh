@@ -93,7 +93,7 @@ costshare_vendor_pct_tbl
 ##    STDOUT - newline delimited text/CSV records with format:
 ##             "mmdd,vendorName,charge,
 ##             Where:
-##               pctPartyX  - Party 'X' percentage applied to the charge
+##               partyXpct  - Party 'X' percentage applied to the charge
 ##               sharePartyXRound - Calculated Party 'X' portion of the charge
 ##                 rounded using "unbaised/bankers" rounding method.
 ##               sharePartyY - Calculated Party 'X' portion of the charge.
@@ -365,10 +365,10 @@ costshare__purchase_stream_normalize(){
       continue
     fi
 
-    purchaseDate="${BASE_REMATCH[$costshare__PURCHASE_DATE_IDX]}"
-    vendorName="${BASE_REMATCH[$costshare__PURCHASE_VENDOR_NAME_IDX]}"
-    charge="$chargeRTN=${BASE_REMATCH[$costshare__PURCHASE_CHARGE_IDX]}"
-    forwardFields="${BASE_REMATCH[$costshare__PURCHASE_FORWARD_IDX]}"
+    purchaseDate="${BASH_REMATCH[$costshare__PURCHASE_DATE_IDX]}"
+    vendorName="${BASH_REMATCH[$costshare__PURCHASE_VENDOR_NAME_IDX]}"
+    charge=${BASH_REMATCH[$costshare__PURCHASE_CHARGE_IDX]}
+    forwardFields="${BASH_REMATCH[$costshare__PURCHASE_FORWARD_IDX]}"
 
     if ! [[ $vendorName =~ $costshare__VENDOR_NAME_TRIM_REGEX ]]; then
       costshare__error_msg errorCnt "purchase" "$purchaseCnt" "$purchase"  "vendor name fails costshare__VENDOR_NAME_TRIM_REGEX='$costshare__VENDOR_NAME_TRIM_REGEX'"
@@ -378,15 +378,14 @@ costshare__purchase_stream_normalize(){
     vendorName=${BASH_REMATCH[1]}
 
     if [[ ${#vendorName} -gt $costshare_VENDOR_NAME_LENGTH_MAX ]]; then
-      costshare__error_msg errorCnt "purchase" "$purchaseCnt" "$purchase"  "vendor name exceeds costshare_VENDOR_NAME_LENGTH_MAX=$costshare_VENDOR_NAME_LENGTH_MAX . Either override length or truncate vendor name"
+      costshare__error_msg errorCnt "purchase" "$purchaseCnt" "$purchase"  "vendor name exceeds costshare_VENDOR_NAME_LENGTH_MAX=$costshare_VENDOR_NAME_LENGTH_MAX. Either override length or truncate vendor name"
       continue
     fi
 
     chargeNumStart=0
-    if [[ "${charge:0:1}" == '-' ]]; then chargeNumS
-tart=1; fi
-    if [[ "${charge:$chargeNumStart:1}"   == "0" ]] \
-    && [[ "${charge:$chargeNumStart+1:1}" != "." ]]; then
+    if [[ "${charge:0:1}" == '-' ]]; then chargeNumStart=1; fi
+    if [[ "${charge:$chargeNumStart:1}"   == '0' ]] \
+    && [[ "${charge:$chargeNumStart+1:1}" != '.' ]]; then
       costshare__error_msg errorCnt "purchase" "$purchaseCnt" "$purchase"  "Charges cannot start with '0' when charge/refund greater than 0.99."
       continue
     fi
@@ -395,9 +394,12 @@ tart=1; fi
     # between the costshare__vendor_pct_tbl and purchase stream
     costshare__embedded_whitespace_replace "$vendorName" vendorName
 
-    echo "$pruchaseDateMMDD","$vendorName","$charge","$forwardFields"
+    echo "$purchaseDate","$vendorName","$charge""$forwardFields"
 
   done
+  if [[ $errorCnt -gt 0 ]]; then
+    abort "Purchase entry(s) from purchase stream do not comply with expected format. errorCnt=$errorCnt"
+  fi
 }
 
 costshare__embedded_whitespace_replace(){
@@ -423,7 +425,6 @@ costshare__charge_share_compute(){
   eval local \-\A \-\r vendorPCT=$(costshare__vendor_pct_map_create)
   eval local \-\A \-\r vendorNameLen=$(costshare__vendor_name_length_map_create)
 
-  local -r vendorRegex=$costshare__expected_format_regex
   local purchase
   while read -r purchase; do
 
@@ -438,13 +439,13 @@ costshare__charge_share_compute(){
       abort "Could not determine vendorSubtypeLens for vendorRoot=$vendorRoot"
     fi
 
-    local pctPartyX=0
-    costshare__charge_share_pct_get vendorPCT "$vendorSubtypeLens"  pctPartyX "$vendorName"
+    local partyXpct=0
+    costshare__charge_share_pct_get vendorPCT "$vendorSubtypeLens"  partyXpct "$vendorName"
 
     # use awk for unbiased rounding to a penny, as bash performs only integer math
     local sharePartyX=0
-    local sharePartyXRound=$(echo $charge $pctPartyX                      | awk '{ printf("%.2f",($1*$2/100))}' )
-    local sharePartyY=$(     echo $charge $sharePartyXRound               | awk '{ printf("%.2f",($1-$2))}')
+    local sharePartyXRound=$(echo $charge $partyXpct        | awk '{ printf("%.2f",($1*$2/100))}' )
+    local sharePartyY=$(     echo $charge $sharePartyXRound | awk '{ printf("%.2f",($1-$2))}')
     # convert decimal totals to intergers so bash can perform arithmetic instead of awk.
     # done this way because it should be faster as, a call to awk 
     # represents a child fork of this process and awk also introduces rounding
@@ -456,7 +457,7 @@ costshare__charge_share_compute(){
       abort "Failed to compute proper share amounts for transaction=$purchase"
     fi
 
-    echo "$purchase",$pctPartyX,$sharePartyXRound,$sharePartyY
+    echo "$purchase",$partyXpct,$sharePartyXRound,$sharePartyY
 
   done
 }
@@ -464,16 +465,16 @@ costshare__charge_share_compute(){
 costshare__charge_share_pct_get(){
   local -r vendorPCTmap=$1
   local -r vendorSubtypeLens="$2"
-  local -r vendorPCTrtn=$3
-  local -r vendorName="$4"
+  local -r vendorName="$3"
+  local -n partyXpctRTN=$4
 
   local -a pct=0
   set -- $vendorSubtypeLens
   while [[ $# -gt 0 ]]; do
     local subtypeName=${vendorName:0:$1}
     eval pct\=\$\{$vendorPCTmap\[\$subtypeName\]\}
-    if [[ -n "$pct" ]]; then
-      eval $vendorPCTrtn\=\$pct
+    if [[ -n $pct ]]; then
+      partyXpctRTN=$pct
       return
     fi
     shift

@@ -317,7 +317,6 @@ Error: vendor name fails costshare__VENDOR_NAME_TRIM_REGEX='^[[:space:]]*([^[:sp
 Abort: Rows of costshare_vendor_pct_tbl don't comply with expected format. errorCnt=1
 error
 }
-
 test_costshare__vendor_pct_tbl_normalize_fail_vendor_max_len_input(){
 cat<<'input'
 012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567,1
@@ -330,9 +329,117 @@ Abort: Rows of costshare_vendor_pct_tbl don't comply with expected format. error
 error
 }
 
+test_costshare__purchase_stream_normalize(){
+  assert_true '
+    echo "fails, regex"
+    | costshare__purchase_stream_normalize 2>&1
+    | assert_output_true test_costshare__purchase_stream_normalize_fail_REGEX'
+  assert_true '
+    test_costshare__purchase_stream_normalize_fail_vendor_max_len_input 
+    | costshare__purchase_stream_normalize 2>&1
+    | assert_output_true test_costshare__purchase_stream_normalize_fail_vendor_max_len'
+  assert_true '
+    echo "10/10,Vendor Name,01.99"
+    | costshare__purchase_stream_normalize 2>&1
+    | assert_output_true test_costshare__purchase_stream_normalize_fail_leading_zero'
+  assert_true '
+    echo "10/10,Vendor Name,0.99"
+    | costshare__purchase_stream_normalize 2>&1
+    | assert_output_true echo "10/10,Vendor Name,0.99"'
+  assert_true '
+    echo "10/10,Vendor Name,-0.99"
+    | costshare__purchase_stream_normalize 2>&1
+    | assert_output_true echo "10/10,Vendor Name,-0.99"'
+  assert_true '
+    echo "10/10,Vendor Name,-.99"
+    | costshare__purchase_stream_normalize 2>&1
+    | assert_output_true test_costshare__purchase_stream_normalize_fail_no_leading_zero'
+  assert_true '
+    echo "10/10,   Vendor   Name   ,100"
+    | costshare__purchase_stream_normalize 2>&1
+    | assert_output_true echo "10/10,Vendor Name,100"'
+  assert_true '
+    echo "10/10/20,   Vendor   Name   ,100.00"
+    | costshare__purchase_stream_normalize 2>&1
+    | assert_output_true echo "10/10/20,Vendor Name,100.00"'
+  assert_true '
+    echo "10/10/20,   Vendor   Name   ,100.00,forwarded fields"
+    | costshare__purchase_stream_normalize 2>&1
+    | assert_output_true echo "10/10/20,Vendor Name,100.00,forwarded fields"'
+  assert_true '
+    echo "10/10/2022,Vendor   123  Name,100.00forwarded fields,f2"
+    | costshare__purchase_stream_normalize 2>&1
+    | assert_output_true echo "10/10/2022,Vendor 123 Name,100.00forwarded fields,f2"'
+}
+test_costshare__purchase_stream_normalize_fail_REGEX(){
+cat<<'error'
+Error: failed to match expected format.  costshare__PURCHASE_DATA_FORMAT_REGEX='^([0-1][0-9]/[0-3][0-9](/[0-9][0-9]([0-9][0-9])?)?),([^,]+),([-]?[0-9]+(\.[0-9][0-9])?)(.*)$'. purchaseCnt=0 purchase='fails, regex'
+Abort: Purchase entry(s) from purchase stream do not comply with expected format. errorCnt=1
+error
+}
+test_costshare__purchase_stream_normalize_fail_vendor_max_len_input(){
+cat<<'input'
+10/10,012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567,100.00
+input
+}
+test_costshare__purchase_stream_normalize_fail_vendor_max_len(){
+cat<<'error'
+Error: vendor name exceeds costshare_VENDOR_NAME_LENGTH_MAX=256. Either override length or truncate vendor name. purchaseCnt=0 purchase='10/10,012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567,100.00'
+Abort: Purchase entry(s) from purchase stream do not comply with expected format. errorCnt=1
+error
+}
+test_costshare__purchase_stream_normalize_fail_leading_zero(){
+cat<<'error'
+Error: Charges cannot start with '0' when charge/refund greater than 0.99.. purchaseCnt=0 purchase='10/10,Vendor Name,01.99'
+Abort: Purchase entry(s) from purchase stream do not comply with expected format. errorCnt=1
+error
+}
+test_costshare__purchase_stream_normalize_fail_no_leading_zero(){
+cat<<'error'
+Error: failed to match expected format.  costshare__PURCHASE_DATA_FORMAT_REGEX='^([0-1][0-9]/[0-3][0-9](/[0-9][0-9]([0-9][0-9])?)?),([^,]+),([-]?[0-9]+(\.[0-9][0-9])?)(.*)$'. purchaseCnt=0 purchase='10/10,Vendor Name,-.99'
+Abort: Purchase entry(s) from purchase stream do not comply with expected format. errorCnt=1
+error
+}
+
+
+test_costshare__charge_share_pct_get(){
+
+  test_costshare__charge_share_pct_vendor_tbl
+  eval local \-\A \-\r vendorPCT=$(costshare__vendor_pct_map_create)
+  eval local \-\A \-\r vendorNameLen=$(costshare__vendor_name_length_map_create)
+  local -i partyXpct=0
+  costshare__charge_share_pct_get vendorPCT "${vendorNameLen[BJS]}" 'BJS Warehouse' partyXpct
+  assert_true '[[ $partyXpct -eq 20 ]]'
+  partyXpct=0
+  costshare__charge_share_pct_get vendorPCT "${vendorNameLen[BJS]}" 'BJS Gas' partyXpct
+  assert_true '[[ $partyXpct -eq 50 ]]'
+  partyXpct=0
+  costshare__charge_share_pct_get vendorPCT "${vendorNameLen[BJS]}" 'BJS GasWarehouse' partyXpct
+  assert_true '[[ $partyXpct -eq 50 ]]'
+  partyXpct=0
+  costshare__charge_share_pct_get vendorPCT "${vendorNameLen[BJS]}" '110 Grill' partyXpct
+  assert_true '[[ $partyXpct -eq 29 ]]'
+  partyXpct=0
+  assert_output_true \
+    echo 'Abort: Failed to find vendorName='"'110 Grill DC'"' in vendor_pct_table.' \
+    --- \
+    costshare__charge_share_pct_get vendorPCT "${vendorNameLen[BJS]}" '110 Grill DC' partyXpct
+}
+test_costshare__charge_share_pct_vendor_tbl(){
+costshare_vendor_pct_tbl(){
+cat <<'costshare_vendor_pct_tbl'
+BJS Warehouse, 20
+BJS Gas      , 50
+110 Grill    , 29
+costshare_vendor_pct_tbl
+}
+}
 
 main(){
   compose_executable "$0"
+
+test_costshare__charge_share_pct_get
+return
 
   test_costshare__error_msg
   test_costshare__embedded_whitespace_replace
@@ -342,6 +449,7 @@ main(){
   test_costshare__vendor_pct_name_encoding_ordering
   test_costshare__vendor_name_length_map
   test_costshare__vendor_pct_tbl_normalize
+  test_costshare__purchase_stream_normalize
 
   assert_return_code_set
 }
