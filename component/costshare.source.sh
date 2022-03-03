@@ -426,21 +426,31 @@ costshare__charge_share_compute(){
   eval local \-\A \-\r vendorNameLen=$(costshare__vendor_name_length_map_create)
 
   local purchase
+  local purchaseDate
+  local vendorName
+  local charge
+  local forwardFields
+  local vendorRoot
+  local vendorSubtypeLens
   while read -r purchase; do
 
     if ! [[ $purchase =~ $costshare__PURCHASE_DATA_FORMAT_REGEX ]]; then
-      abort 'Charge format invalid=' "$purchase"
+      abort 'Purchase data fails costshare__PURCHASE_DATA_FORMAT_REGEX='"'""$costshare__PURCHASE_DATA_FORMAT_REGEX""'"'purchase='"'""$purchase""'"
     fi
-    local vendorName="${BASH_REMATCH[$costshare__PURCHASE_VENDOR_NAME_IDX]}"
-    local charge=${BASH_REMATCH[$costshare__PURCHASE_CHARGE_IDX]}
-    local vendorRoot=${vendorName%% *}
-    local vendorSubtypeLens=${vendorNameLen[$vendorRoot]}
+
+    purchaseDate="${BASH_REMATCH[$costshare__PURCHASE_DATE_IDX]}"
+    vendorName="${BASH_REMATCH[$costshare__PURCHASE_VENDOR_NAME_IDX]}"
+    charge=${BASH_REMATCH[$costshare__PURCHASE_CHARGE_IDX]}
+    forwardFields="${BASH_REMATCH[$costshare__PURCHASE_FORWARD_IDX]}"
+
+    vendorRoot=${vendorName%% *}
+    vendorSubtypeLens=${vendorNameLen[$vendorRoot]}
     if [[ -z "$vendorSubtypeLens" ]]; then
-      abort "Could not determine vendorSubtypeLens for vendorRoot=$vendorRoot"
+      abort "Could not determine vendorSubtypeLens for vendorRoot='$vendorRoot' "
     fi
 
     local partyXpct=0
-    costshare__charge_share_pct_get vendorPCT "$vendorSubtypeLens"  partyXpct "$vendorName"
+    costshare__charge_share_pct_get vendorPCT "$vendorSubtypeLens" "$vendorName" partyXpct
 
     # use awk for unbiased rounding to a penny, as bash performs only integer math
     local sharePartyX=0
@@ -454,10 +464,10 @@ costshare__charge_share_compute(){
     # awk sees them as integers but chose the bash method below.  
     local -i checkCharge="${charge//./} - ${sharePartyXRound//./} - ${sharePartyY//./}"
     if [[ $checkCharge -ne 0 ]]; then
-      abort "Failed to compute proper share amounts for transaction=$purchase"
+      abort "Failed to compute proper share amounts for purchase='$purchase' "
     fi
 
-    echo "$purchase",$partyXpct,$sharePartyXRound,$sharePartyY
+    echo "$purchaseDate","$vendorName",$charge,$partyXpct,$sharePartyXRound,$sharePartyY"$forwardFields"
 
   done
 }
