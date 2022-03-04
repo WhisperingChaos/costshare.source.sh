@@ -7,8 +7,9 @@
 ##    Divide the purchase cost of an item/service between two parties: Party 'X'
 ##    and Party 'Y'.  Requires a table whose rows relate a vendor to the 
 ##    precentage charged to Party 'X' and a stream of purchase transactions
-##    whose data includes a vendor name that's used to correlate the a 
-##    row in the table. 
+##    whose data includes a vendor name.  The vendor name in the purchase
+##    stream is correlated with the ones found in the vendor table in order
+##    determine the percentage of the purchase cost to apportioned to Party 'X'.
 ##  Note
 ##    Adheres to "SOLID bash" principles:
 ##    https://github.com/WhisperingChaos/SOLID_Bash#solid_bash
@@ -52,7 +53,7 @@
 ##      characters should work.  Also, the process should accomidate characters
 ##      like #$@.
 ##    - Its length will be truncated to 'costshare_VENDOR_NAME_LENGTH_MAX' to
-##      prevent exploitation/bugs if the vendor name wasn't limited.
+##      prevent exploitation/bugs.
 ##    Party 'X' Percentage
 ##    - The percentage of the total charge to be paid by Party 'X'.
 ##    - The share paid by Party 'Y' is the amount that remains after deducting
@@ -61,7 +62,7 @@
 ##
 ###############################################################################
 costshare_vendor_pct_tbl(){
-  abort "Override this table to provide the streaming data in the required form."
+  abort "Override the costshare_vendor_pct_tbl to provide the table of vendors and Party 'X' percentage."
 # Vendor Name, Party 'X' Percentage
 # Heredoc example:
 cat <<costshare_vendor_pct_tbl
@@ -84,24 +85,29 @@ costshare_vendor_pct_tbl
 ##    owed by both Party 'X' and Party 'Y', and streams results. 
 ##  In
 ##    STDIN  - newline delimited text/CSV records with format:
-##             "mmdd,vendorName,charge".
+##             "date,vendorName,charge"[forwardedFields].
 ##             Where:
-##               mmdd       - nn/nn
-##               vendorName - see constraints defined by 'costshare_vendor_pct_tbl'.
-##               charge     - must conform to decimal number with 2 places of 
-##                            accuracy to right of decimal point.  
+##               date       - (required) MM/DD, MM/DD/YY, or MM/DD/YYY
+##               vendorName - (required) see constraints defined by 'costshare_vendor_pct_tbl'.
+##               cost       - (required) must conform to decimal number with 2
+##                            places of accuracy to right of decimal point. 
+##                            A negative sign can preceed the number and
+##                            produce negative shared cost amount. 
+##               [forwardedFields] - (optional) any data following the two digit
+##                            cost will be forwarded through this component by
+##                            appending this data to its generated output.
 ##    STDOUT - newline delimited text/CSV records with format:
-##             "mmdd,vendorName,charge,
+##             "date,vendorName,charge,partyXpct,sharePartyXRound,sharePartyY"[forwardedFields]
 ##             Where:
-##               partyXpct  - Party 'X' percentage applied to the charge
+##               partyXpct        - Party 'X' percentage applied to the charge
 ##               sharePartyXRound - Calculated Party 'X' portion of the charge
-##                 rounded using "unbaised/bankers" rounding method.
-##               sharePartyY - Calculated Party 'X' portion of the charge.
+##                                  rounded using "unbaised/bankers" rounding method.
+##               sharePartyY      - Calculated Party 'Y' portion of the charge.
+##               [forwardedFields]- (optional) see STDIN above
 ###############################################################################
 costshare_charge_share_run(){
-  local -r VENDOR_FILTER=$(costshare_vendor_filter_regex)
-  grep -E "$VENDOR_FILTER"			\
-  | costshare__purchase_stream_normalize	\
+  costshare__purchase_stream_normalize \
+  | costshare__grep_fixed_filter       \
   | costshare__charge_share_compute
 }
 ###############################################################################
@@ -133,26 +139,28 @@ costshare_vendor_pct_tbl_normalize(){
 ###############################################################################
 ##
 ##  Purpose
-##    Creates a regex pattern of all vendor names by inserting an "or" operator
-##    at the end of a name. An embedded space within an name becomes part of
-##    the regex match.  As such, it's expected that the regex implementation
-##    will interperate the space as a match character instead of a whitespace
-##    that's ignored. 
+##    Creates a grep fixed filter to consume only the normalized vendor
+##    names specified by the costshare_vendor_pct_tbl.
 ##  Why
-##    Facilitate filtering using regex compliant tools, like "grep -E".
-##    Increase component reliability by eliminating static coding via the 
-##    generation of the regex filter from provided table. 
+##    Facilitate filtering using grep fixed filter tooling.
+##    Improves reliability by replacing a statically coded instance
+##    with a dynamically produced one. 
 ##  In
 ##    STDIN  - provided by STDOUT of costshare_vendor_pct_tbl_normalize
-##    STDOUT - a single line of Vendor root names separated by regex "or"
-##             operator where the last vendor name is 'DoesNotMatchAnyVendor'.
+##    STDOUT - one or more newline delimited entries of normalize vendor names.
+##             last normalized name is always 'DoesNotMatchAnyVendor' as it
+##             should not match any vendor names and if the vendor table is 
+##             empty, nothing in the input purchase stream will be processed.
+##             Otherwise, if this filter was truely empty, all purchases would
+##             be processed.  The above is encapsulated in single quotes.
 ###############################################################################
-costshare_vendor_filter_regex(){
-
+costshare_vendor_fixed_filter(){
+  echo -n "'"
   costshare_vendor_pct_tbl_normalize \
-  | awk 'BEGIN { FS = "," } ; { printf("%s%s",$1,"|")}'
-  # eliminaes the code needed to remove last 'or'. 
-  echo DoesNotMatchAnyVendor
+  | awk 'BEGIN { FS = ","; } { print($1)}'
+  # simplifies terminating filter.  also, if only entry due to empty costshare
+  # table, creates a filter that doesn't match any input vendors. 
+  echo DoesNotMatchAnyVendor"'"
 }
 ##############################################################################
 ##    These constants are part of the public interface and can be changed.
@@ -179,7 +187,7 @@ declare -g -i -r costshare_VENDOR_NAME_LENGTH_MAX=256
 #  whitespace between words of a vendor name.
 declare -g -r costshare__VENDOR_NAME_TRIM_REGEX='^[[:space:]]*([^[:space:]][^[:space:]][^[:space:]]+([[:space:]]+[^[:space:]]+)*)[[:space:]]*$'
 #  allow whitespace either before or after vendor name and whole number
-#  percentage.  allows leading leading/trailing spaces to align values
+#  percentage.  allows leading and trailing spaces to align values
 #  in a visual column pattern.
 declare -g -r costshare__VENDOR_PCT_TABLE_REGEX='^([^,]+),[[:space:]]*([1-9][0-9]?[0-9]?)[[:space:]]*$'
 
@@ -235,7 +243,7 @@ costshare__vendor_pct_tbl_normalize(){
 ##    both identify transactions of interest and compute the appropriate share
 ##    amounts for Party 'Y' and Party 'X'.
 ##  In
-##    STDIN - generated by costshare_vendor_pct_tbl_normalize STDOUT.
+##    STDIN - generated by the STDOUT of costshare_vendor_pct_tbl_normalize.
 ##  Out
 ##    STDOUT - bash associative array syntax where the "key" is the vendor name
 ##             while its value is Party 'X''s percentage.
@@ -391,7 +399,8 @@ costshare__purchase_stream_normalize(){
     fi
 
     # applying this function unifies the vendor name semantics
-    # between the costshare__vendor_pct_tbl and purchase stream
+    # between the costshare__vendor_pct_tbl and purchase stream.
+    # permits their comparision or use as hash values.
     costshare__embedded_whitespace_replace "$vendorName" vendorName
 
     echo "$purchaseDate","$vendorName","$charge""$forwardFields"
@@ -490,6 +499,14 @@ costshare__charge_share_pct_get(){
     shift
   done
   abort "Failed to find vendorName='$vendorName' in vendor_pct_table."
+}
+
+costshare__grep_fixed_filter(){
+  local -r filter="$(costshare_vendor_fixed_filter)"
+  # this function was created to encapsulate processing grep
+  # and the eval required to properly include fixed strings
+  # to simplify the code that uses it.
+  eval grep \-\-fixed\-strings "$filter"
 }
 
 costshare__error_msg(){
