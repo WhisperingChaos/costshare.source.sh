@@ -492,8 +492,72 @@ Abort: Could not determine vendorSubtypeLens for vendorRoot='fail'
 error
 }
 
+
+test_costshare_charge_share_run(){
+  test_costshare_charge_share_run_vendor_pct_tbl
+  assert_true '
+    echo "10/10,BJS Warehouse,-33.34,ForwardedFields"
+    | costshare_charge_share_run 2>&1
+    | assert_output_true echo "10/10,BJS Warehouse,-33.34,20,-6.67,-26.67,ForwardedFields"'
+}
+test_costshare_charge_share_run_vendor_pct_tbl(){
+costshare_vendor_pct_tbl(){
+cat <<'costshare_vendor_pct_tbl'
+BJS Warehouse, 20
+BJS Gas      , 50
+110 Grill    , 29
+BJS PARTYX   , 100
+costshare_vendor_pct_tbl
+}
+}
+
+
+test_costshare_vendor_fixed_filter(){
+  test_costshare_vendor_fixed_filter_vendor_pct_tbl
+  assert_output_true \
+    test_costshare_vendor_fixed_filter_good \
+    --- \
+    costshare_vendor_fixed_filter
+}
+
+test_costshare_vendor_fixed_filter_vendor_pct_tbl(){
+costshare_vendor_pct_tbl(){
+cat <<'costshare_vendor_pct_tbl'
+BJS x        , 10
+BJS Warehouse, 20
+BJS G.a?+s   , 50
+110 Grill    , 29
+BJS PARTYX   , 100
+costshare_vendor_pct_tbl
+}
+}
+test_costshare_vendor_fixed_filter_good(){
+cat<<'fixedfilter'
+'BJS x
+BJS Warehouse
+BJS G.a?+s
+110 Grill
+BJS PARTYX
+DoesNotMatchAnyVendor'
+fixedfilter
+}
+
+
+test_costshare_vendor_pct_tbl(){
+  assert_output_true \
+    echo "Abort: Override the costshare_vendor_pct_tbl to provide the table of vendors and Party 'X' percentage." \
+    --- \
+    costshare_vendor_pct_tbl
+}
+
+
 main(){
   compose_executable "$0"
+
+  # test_costshare_vendor_pct_tbl should always be after
+  # compose because it tests default behavior.  the
+  # default is overriden by the other tests.
+  test_costshare_vendor_pct_tbl
 
   test_costshare__error_msg
   test_costshare__embedded_whitespace_replace
@@ -506,6 +570,8 @@ main(){
   test_costshare__purchase_stream_normalize
   test_costshare__charge_share_pct_get
   test_costshare__charge_share_compute
+  test_costshare_charge_share_run
+  test_costshare_vendor_fixed_filter
 
   assert_return_code_set
 }
