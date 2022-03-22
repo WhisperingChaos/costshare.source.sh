@@ -6,7 +6,7 @@ A [component](https://github.com/WhisperingChaos/SOLID_Bash#component-compositio
 
 Given these inputs, the component will apportion the cost/reimbursement between two parties.
 
-### How to use
+### How to Install
 #### Source Statement
 Simply copy the [raw version](./component/costshare.source.sh?raw=1) of ```costshare``` or extract it from a [zip](https://github.com/whisperingchaos/costshare/zipball/master) of this repository.  
 component/costshare.source.sh
