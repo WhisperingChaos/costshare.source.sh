@@ -1,7 +1,8 @@
 # [costshare](./component/costshare.source.sh)
 A [component](https://github.com/WhisperingChaos/SOLID_Bash#component-composition) that consumes: 
-- a CSV formated stream of purchases/refunds and
-- a vendor table in CSV format which defines one or more rows defining a vendor name and the percentage to be paid by one of the parties.
+- a required CSV formated stream of purchases/refunds and
+- a required vendor table in CSV format which defines one or more rows defining a vendor name and the percentage to be paid by one of the parties and
+- an optional purchase exclusionary table which discards one or more specific pruchase that would otherwize be included by the vendor table.
 
 Given these inputs, the component will apportion the cost/reimbursement between two parties.
 
@@ -12,7 +13,7 @@ component/costshare.source.sh
 
 Use the bash [```'.' (AKA source)```](https://www.gnu.org/software/bash/manual/html_node/Bourne-Shell-Builtins.html) statement to include component into your own source module.
 ### SOLID
-Another method exists that implements a [SOLID](https://github.com/WhisperingChaos/SOLID_Bash) approach to managing bash source.  This approach is demonstrated by the ```test``` component, that configures an executable to test this component.
+Another method exists that implements a [SOLID](https://github.com/WhisperingChaos/SOLID_Bash) approach to managing bash source.  This approach is demonstrated by the ```test``` component, that configures (constructs) an executable from a set components to test this one.
 
 
 ### Dependencies
