@@ -28,13 +28,8 @@ test_costshare_chase_purchase_exclude_filter_tbl(){
     costshare_chase_purchase_exclude_filter_tbl
 }
 test_costshare_chase_purchase_exclude_filter_tbl_fatal_ovrride(){
-cat <<fatal_ovrride
-${assert_REGEX_COMPARE}msgType='Fatal' msg='override this function to exclude certain purchase transactions\.' .*
-${assert_REGEX_COMPARE}\+  Caller: file.*
-${assert_REGEX_COMPARE}\+  Caller: file.*
-${assert_REGEX_COMPARE}\+  Caller: file.*
-${assert_REGEX_COMPARE}\+  Caller: file.*
-${assert_REGEX_COMPARE}\+  Caller: file.*
+cat <<'fatal_ovrride'
+Abort: override this function to exclude certain purchase transactions.
 fatal_ovrride
 }
 
@@ -309,13 +304,8 @@ test_costshare__purchase_exclude_filter_regex_create(){
     | assert_output_true test_costshare__purchase_exclude_filter_regex_create_multi_rows_expected'
 }
 test_costshare__purchase_exclude_filter_regex_create_override_error(){
-  cat <<override_error
-${assert_REGEX_COMPARE}msgType='Fatal' msg='override this function to exclude certain purchase transactions\.'.*
-${assert_REGEX_COMPARE} .*
-${assert_REGEX_COMPARE} .*
-${assert_REGEX_COMPARE} .*
-${assert_REGEX_COMPARE} .*
-${assert_REGEX_COMPARE} .*
+  cat <<'override_error'
+Abort: override this function to exclude certain purchase transactions.
 override_error
 }
 test_costshare__purchase_exclude_filter_regex_create_vendor_name_excluded(){

@@ -64,7 +64,7 @@
 ##
 ###############################################################################
 costshare_vendor_pct_tbl(){
-  abort "Override the costshare_vendor_pct_tbl to provide the table of vendors and Party 'X' percentage."
+  costshare__fatal "Override the costshare_vendor_pct_tbl to provide the table of vendors and Party 'X' percentage."
 # Vendor Name, Party 'X' Percentage
 # Heredoc example:
 cat <<costshare_vendor_pct_tbl
@@ -104,7 +104,7 @@ costshare_vendor_pct_tbl
 ###############################################################################
 costshare_chase_purchase_exclude_filter_tbl(){
 #vendorNameRegex,dateRegex,amtRegex
-  msg_fatal "override this function to exclude certain purchase transactions."
+  costshare__fatal "override this function to exclude certain purchase transactions."
 }
 ################################ Public API ###################################
 ##
@@ -278,7 +278,7 @@ costshare__vendor_pct_tbl_normalize(){
     echo "$normRow"
   done
   if [[ $errorCnt -gt 0 ]]; then
-    abort "Rows of costshare_vendor_pct_tbl don't comply with expected format. errorCnt=$errorCnt"
+    costshare__fatal "Rows of costshare_vendor_pct_tbl don't comply with expected format. errorCnt=$errorCnt"
   fi
 }
 ###############################################################################
@@ -307,7 +307,7 @@ costshare__vendor_fixed_filter(){
   while read -r vendor; do
 
     if ! csv_field_get "$vendor" unsetFieldCnt vendorName; then 
-      abort 'invalid CSV format vendor='"$vendor"
+      costshare__fatal 'invalid CSV format vendor='"$vendor"
     fi
   
     if [[ $unsetFieldCnt -gt 0 ]] \
@@ -356,11 +356,11 @@ costshare__purchase_exclude_filter_regex_create(){
     dateRegex=''
     amtRegex=''
     if ! csv_field_get "$exclude" fieldUnset  vendorNameRegex dateRegex amtRegex; then
-      msg_fatal "problem reading exclude filter exclude='$exclude' excludeCnt=$excludeCnt"
+      costshare__fatal "problem reading exclude filter exclude='$exclude' excludeCnt=$excludeCnt"
     fi 
 
     if [[ "$fieldUnset" -gt 2   ]]; then
-      msg_fatal "Exclude request must include at least one regex expression. exclude='$exclude' excludeCnt=$excludeCnt "
+      costshare__fatal "Exclude request must include at least one regex expression. exclude='$exclude' excludeCnt=$excludeCnt "
     fi
 
     if [[ -z "$vendorNameRegex" ]]; then
@@ -502,7 +502,7 @@ costshare__vendor_name_length_map(){
     vendorName=${line%%,*}
     nameLen=${#vendorName}
     if [[ $nameLen -lt 3 ]]; then
-      abort "vendor name must be at least 3 characters long. vendorName='$vendorName' nameLen=$nameLen"
+      costshare__fatal "vendor name must be at least 3 characters long. vendorName='$vendorName' nameLen=$nameLen"
     fi
     vendorStartWord=${vendorName%% *}
     lenEncoding=${nameLenMap[$vendorStartWord]}
@@ -623,7 +623,7 @@ costshare__purchase_stream_normalize(){
 
   done
   if [[ $errorCnt -gt 0 ]]; then
-    abort "Purchase entry(s) from purchase stream do not comply with expected format. errorCnt=$errorCnt"
+    costshare__fatal "Purchase entry(s) from purchase stream do not comply with expected format. errorCnt=$errorCnt"
   fi
 }
 
@@ -666,13 +666,13 @@ costshare__charge_share_compute(){
     # (re)set the remainder field to empty string.
     eval $csv_field_REMAINDER=\'\'
     if ! csv_field_get "$purchase" unsetFieldCnt purchaseDate vendorName charge $csv_field_REMAINDER 2>/dev/null; then
-      abort 'Purchase data fails basic CSV spec. purchase='"'""$purchase""'"
+      costshare__fatal 'Purchase data fails basic CSV spec. purchase='"'""$purchase""'"
     fi
     
     vendorRoot=${vendorName%% *}
     vendorSubtypeLens=${vendorNameLen[$vendorRoot]}
     if [[ -z "$vendorSubtypeLens" ]]; then
-      abort "Could not determine vendorSubtypeLens for vendorRoot='$vendorRoot' "
+      costshare__fatal "Could not determine vendorSubtypeLens for vendorRoot='$vendorRoot' "
     fi
 
     local partyXpct=0
@@ -690,7 +690,7 @@ costshare__charge_share_compute(){
     # awk sees them as integers but chose the bash method below.  
     local -i checkCharge="${charge//./} - ${sharePartyXRound//./} - ${sharePartyY//./}"
     if [[ $checkCharge -ne 0 ]]; then
-      abort "Failed to compute proper share amounts for purchase='$purchase' "
+      costshare__fatal "Failed to compute proper share amounts for purchase='$purchase' "
     fi
 
     eval forwardFields\=\"\$$csv_field_REMAINDER\"
@@ -724,7 +724,7 @@ costshare__charge_share_pct_get(){
     fi
     shift
   done
-  abort "Failed to find vendorName='$vendorName' in vendor_pct_table."
+  costshare__fatal "Failed to find vendorName='$vendorName' in vendor_pct_table."
 }
 
 costshare__grep_fixed_filter(){
@@ -747,12 +747,12 @@ costshare__error_msg(){
   if [[ $errorCntRTN -lt $costshare_ERROR_THRESHOLD_STOP ]]; then
     return
   fi
- abort "Number of errors detected exceeeds
+ costshare__fatal "Number of errors detected exceeeds
  + costshare_ERROR_THRESHOLD_STOP=$costshare_ERROR_THRESHOLD_STOP.
  + Repair these errors to continue." 
 }   
 
-abort(){
+costshare__fatal(){
   echo Abort: "$@" >&2
   exit 1
 }
