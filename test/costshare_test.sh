@@ -11,6 +11,34 @@ compose_executable(){
 }
 
 
+test_costshare_vendor_pct_tbl(){
+
+  assert_output_true \
+    echo "Abort: Override the costshare_vendor_pct_tbl to provide the table of vendors and Party 'X' percentage." \
+    --- \
+    costshare_vendor_pct_tbl
+}
+
+
+test_costshare_chase_purchase_exclude_filter_tbl(){
+
+  assert_output_true \
+    test_costshare_chase_purchase_exclude_filter_tbl_fatal_ovrride \
+    --- \
+    costshare_chase_purchase_exclude_filter_tbl
+}
+test_costshare_chase_purchase_exclude_filter_tbl_fatal_ovrride(){
+cat <<fatal_ovrride
+${assert_REGEX_COMPARE}msgType='Fatal' msg='override this function to exclude certain purchase transactions\.' .*
+${assert_REGEX_COMPARE}\+  Caller: file.*
+${assert_REGEX_COMPARE}\+  Caller: file.*
+${assert_REGEX_COMPARE}\+  Caller: file.*
+${assert_REGEX_COMPARE}\+  Caller: file.*
+${assert_REGEX_COMPARE}\+  Caller: file.*
+fatal_ovrride
+}
+
+
 test_costshare__error_msg(){
 
   local -i errorCnt=0
@@ -30,8 +58,8 @@ test_costshare__error_msg(){
 }
 test_costshare__error_msg_threshold_exit()(
 
-   errorCnt=$costshare_ERROR_THRESHOLD_STOP
-   costshare__error_msg errorCnt 'row' 1 'entry content' 'message to print'
+  errorCnt=$costshare_ERROR_THRESHOLD_STOP
+  costshare__error_msg errorCnt 'row' 1 'entry content' 'message to print'
  
   # exceeding the threshold should exit this child
   # process before executing this assert.  if it does
@@ -65,20 +93,20 @@ costshare_vendor_pct_tbl(){
 cat <<'costshare_vendor_pct_tbl'
    Root1 Vendor,  20
 Root2 Vendor,30
-Root3   Vendor,40
+Root3   Vendor {},40
 Root4		Vendor,40
 Root5		Vendor    part1 part2  part3 4,50
-Root6 ~ ! # $ % ^ & ( ) _ - + = ] [ | \ " ' | ? . / < > $s * : end,60
+"Root6 ~ ! # $ % ^ & ( ) _ - + = ] [ | \ "" ' | ? . / < > $s * : end",60
 costshare_vendor_pct_tbl
 }
 test_costshare_vendor_pct_tbl_expected(){
 cat <<'costshare_vendor_pct_tbl_result'
 Root1 Vendor,20
 Root2 Vendor,30
-Root3 Vendor,40
+Root3 Vendor {},40
 Root4 Vendor,40
 Root5 Vendor part1 part2 part3 4,50
-Root6 ~ ! # $ % ^ & ( ) _ - + = ] [ | \ " ' | ? . / < > $s * : end,60
+"Root6 ~ ! # $ % ^ & ( ) _ - + = ] [ | \ "" ' | ? . / < > $s * : end",60
 costshare_vendor_pct_tbl_result
 }
 }
@@ -86,117 +114,31 @@ costshare_vendor_pct_tbl_result
 test_costshare__purchase_REGEX(){
 
 # MM/DD
-  local purchase='01/10,vendor name,100.50,forwarded,fields'
-  assert_true '[[ $purchase =~ $costshare__PURCHASE_DATA_FORMAT_REGEX ]]'
+  assert_true '[[ 10/10 =~ $costshare__PURCHASE_DATE_REGEX ]]'
 
-  local purchaseDate="${BASH_REMATCH[$costshare__PURCHASE_DATE_IDX]}"
-  assert_true '[[ $purchaseDate == "01/10" ]]'
-
-  local vendorName="${BASH_REMATCH[$costshare__PURCHASE_VENDOR_NAME_IDX]}"
-  assert_true '[[ $vendorName == "vendor name" ]]'
-
-  local charge=${BASH_REMATCH[$costshare__PURCHASE_CHARGE_IDX]}
-  assert_true '[[ $charge == "100.50" ]]'
-
-  local forwardFields=${BASH_REMATCH[$costshare__PURCHASE_FORWARD_IDX]}
-  assert_true '[[ $forwardFields == ",forwarded,fields" ]]'
+# MM/DD/YY
+  assert_true '[[ 01/10/22 =~ $costshare__PURCHASE_DATE_REGEX ]]'
 
 # MM/DD/YYYY
-  local purchase='01/10/2022,vendor name,100.50,forwarded,fields'
-  assert_true '[[ $purchase =~ $costshare__PURCHASE_DATA_FORMAT_REGEX ]]'
-
-  local purchaseDate="${BASH_REMATCH[$costshare__PURCHASE_DATE_IDX]}"
-  assert_true '[[ $purchaseDate == "01/10/2022" ]]'
-
-  local vendorName="${BASH_REMATCH[$costshare__PURCHASE_VENDOR_NAME_IDX]}"
-  assert_true '[[ $vendorName == "vendor name" ]]'
-
-  local charge=${BASH_REMATCH[$costshare__PURCHASE_CHARGE_IDX]}
-  assert_true '[[ $charge == "100.50" ]]'
-
-  local forwardFields=${BASH_REMATCH[$costshare__PURCHASE_FORWARD_IDX]}
-  assert_true '[[ $forwardFields == ",forwarded,fields" ]]'
-
-# whole number charge
-  local purchase='01/10/20,vendor name,100,forwarded,fields'
-  assert_true '[[ $purchase =~ $costshare__PURCHASE_DATA_FORMAT_REGEX ]]'
-
-  local purchaseDate="${BASH_REMATCH[$costshare__PURCHASE_DATE_IDX]}"
-  assert_true '[[ $purchaseDate == "01/10/20" ]]'
-
-  local vendorName="${BASH_REMATCH[$costshare__PURCHASE_VENDOR_NAME_IDX]}"
-  assert_true '[[ $vendorName == "vendor name" ]]'
-
-  local charge=${BASH_REMATCH[$costshare__PURCHASE_CHARGE_IDX]}
-  assert_true '[[ $charge == "100" ]]'
-
-  local forwardFields=${BASH_REMATCH[$costshare__PURCHASE_FORWARD_IDX]}
-  assert_true '[[ $forwardFields == ",forwarded,fields" ]]'
-
-# negative whole number charge(refund)
-  local purchase='01/10/20,vendor name,-100,forwarded,fields'
-  assert_true '[[ $purchase =~ $costshare__PURCHASE_DATA_FORMAT_REGEX ]]'
-
-  local purchaseDate="${BASH_REMATCH[$costshare__PURCHASE_DATE_IDX]}"
-  assert_true '[[ $purchaseDate == "01/10/20" ]]'
-
-  local vendorName="${BASH_REMATCH[$costshare__PURCHASE_VENDOR_NAME_IDX]}"
-  assert_true '[[ $vendorName == "vendor name" ]]'
-
-  local charge=${BASH_REMATCH[$costshare__PURCHASE_CHARGE_IDX]}
-  assert_true '[[ $charge == "-100" ]]'
-
-  local forwardFields=${BASH_REMATCH[$costshare__PURCHASE_FORWARD_IDX]}
-  assert_true '[[ $forwardFields == ",forwarded,fields" ]]'
-
-# vendor name with spaces
-  local purchase='01/10/20,  vendor    name  ,-100,forwarded,fields'
-  assert_true '[[ $purchase =~ $costshare__PURCHASE_DATA_FORMAT_REGEX ]]'
-
-  local purchaseDate="${BASH_REMATCH[$costshare__PURCHASE_DATE_IDX]}"
-  assert_true '[[ $purchaseDate == "01/10/20" ]]'
-
-  local vendorName="${BASH_REMATCH[$costshare__PURCHASE_VENDOR_NAME_IDX]}"
-  local -r vdn="  vendor    name  " 
-  assert_true '[[ "$vendorName" == "$vdn" ]]'
-
-  local charge=${BASH_REMATCH[$costshare__PURCHASE_CHARGE_IDX]}
-  assert_true '[[ $charge == "-100" ]]'
-
-  local forwardFields=${BASH_REMATCH[$costshare__PURCHASE_FORWARD_IDX]}
-  assert_true '[[ $forwardFields == ",forwarded,fields" ]]'
-
-# remove optional forwarded fields
-  local purchase='01/10/20,vendor name,-100'
-  assert_true '[[ $purchase =~ $costshare__PURCHASE_DATA_FORMAT_REGEX ]]'
-
-  local purchaseDate="${BASH_REMATCH[$costshare__PURCHASE_DATE_IDX]}"
-  assert_true '[[ $purchaseDate == "01/10/20" ]]'
-
-  local vendorName="${BASH_REMATCH[$costshare__PURCHASE_VENDOR_NAME_IDX]}"
-  assert_true '[[ $vendorName == "vendor name" ]]'
-
-  local charge=${BASH_REMATCH[$costshare__PURCHASE_CHARGE_IDX]}
-  assert_true '[[ $charge == "-100" ]]'
-
-  local forwardFields=${BASH_REMATCH[$costshare__PURCHASE_FORWARD_IDX]}
-  assert_true '[[ "$forwardFields" == "" ]]'
+  assert_true '[[ 01/10/2022 =~ $costshare__PURCHASE_DATE_REGEX ]]'
 
 # bad date
-  local purchase='011,vendor name,-100'
-  assert_false '[[ $purchase =~ $costshare__PURCHASE_DATA_FORMAT_REGEX ]]'
+  assert_false '[[ 01-10 =~ $costshare__PURCHASE_DATE_REGEX ]]'
 
-# bad vendor name
-  local purchase='01/11,vendor,name,-100'
-  assert_false '[[ $purchase =~ $costshare__PURCHASE_DATA_FORMAT_REGEX ]]'
+# whole number charge
+  assert_true '[[ 100 =~ $costshare__PURCHASE_CHARGE_REGEX ]]'
 
-# bad vendor name
-  local purchase='01/11,vendor, 100 name,-100'
-  assert_false '[[ $purchase =~ $costshare__PURCHASE_DATA_FORMAT_REGEX ]]'
+# negative whole number charge(refund)
+  assert_true '[[ -100 =~ $costshare__PURCHASE_CHARGE_REGEX ]]'
 
-# bad vendor name but undetectable
-  local purchase='01/11,vendor,100 name,-100'
-  assert_true '[[ $purchase =~ $costshare__PURCHASE_DATA_FORMAT_REGEX ]]'
+# decimal number charge < $1
+  assert_true '[[ 0.95 =~ $costshare__PURCHASE_CHARGE_REGEX ]]'
+
+# decimal number charge > $1
+  assert_true '[[ 100.65 =~ $costshare__PURCHASE_CHARGE_REGEX ]]'
+
+# negative decimal number charge
+  assert_true '[[ -0.95 =~ $costshare__PURCHASE_CHARGE_REGEX ]]'
 }
 
 test_costshare__embedded_whitespace_replace(){
@@ -212,6 +154,13 @@ test_costshare__embedded_whitespace_replace(){
 
   costshare__embedded_whitespace_replace 'abcd' result
   assert_true '[[ "$result" == "abcd" ]]'
+
+  costshare__embedded_whitespace_replace '		,a  b' result
+  assert_true '[[ "$result" == " ,a b" ]]'
+
+  costshare__embedded_whitespace_replace 'a,  b' result
+  assert_true '[[ "$result" == "a, b" ]]'
+
 }
 
 test_costshare__vendor_pct_map_create(){
@@ -225,11 +174,8 @@ test_costshare__vendor_pct_map_create(){
    costshare__vendor_pct_map_create
 }
 test_costshare__vendor_pct_map_create_output_1(){
-cat <<test_costshare__vendor_pct_map_create_output_1
-(
-["1Root Vendor"]="20"
-["2Root Vendor"]="30"
-)
+cat <<'test_costshare__vendor_pct_map_create_output_1'
+'(["1Root Vendor"]="20" ["2Root Vendor"]="30" )'
 test_costshare__vendor_pct_map_create_output_1
 }
 
@@ -284,7 +230,7 @@ test_costshare__vendor_pct_tbl_normalize(){
 
   assert_true 'echo "field1,field2,field3"
    | costshare__vendor_pct_tbl_normalize 2>&1
-   | assert_output_true test_costshare__vendor_pct_tbl_normalize_fail_regex'
+   | assert_output_true test_costshare__vendor_pct_tbl_normalize_invalid_pct_regex'
 
   assert_true 'echo "vendor,101"
    | costshare__vendor_pct_tbl_normalize 2>&1
@@ -299,9 +245,9 @@ test_costshare__vendor_pct_tbl_normalize(){
    | assert_output_true test_costshare__vendor_pct_tbl_normalize_fail_vendor_max_len'
 
 }
-test_costshare__vendor_pct_tbl_normalize_fail_regex(){
+test_costshare__vendor_pct_tbl_normalize_invalid_pct_regex(){
 cat<<'error'
-Error: fails format check costshare__VENDOR_PCT_TABLE_REGEX='^([^,]+),[[:space:]]*([1-9][0-9]?[0-9]?)[[:space:]]*$'. rowCnt=1 row='field1,field2,field3'
+Error: invalid percentage format  costshare__PCT_TABLE_REGEX='^[[:space:]]*([1-9][0-9]?[0-9]?)[[:space:]]*$'. rowCnt=1 row='field1,field2,field3'
 Abort: Rows of costshare_vendor_pct_tbl don't comply with expected format. errorCnt=1
 error
 }
@@ -329,11 +275,154 @@ Abort: Rows of costshare_vendor_pct_tbl don't comply with expected format. error
 error
 }
 
+
+test_costshare__purchase_exclude_filter_regex_create(){
+
+  assert_output_true \
+    test_costshare__purchase_exclude_filter_regex_create_override_error  \
+    --- \
+    costshare_chase_purchase_exclude_filter_tbl
+ 
+  assert_true '
+    echo ",Date,Amt"
+    | costshare__purchase_exclude_filter_regex_create 2>&1
+    | assert_output_true test_costshare__purchase_exclude_filter_regex_create_vendor_name_excluded'
+
+  assert_true '
+    echo '"'"'BJS $$.*'"'"'
+    | costshare__purchase_exclude_filter_regex_create 2>&1
+    | assert_output_true test_costshare__purchase_exclude_filter_regex_create_vendor_name_regex'
+
+  assert_true '
+    echo '"'"'BJS .*,10/[[:digit:]]?,'"'"'
+    | costshare__purchase_exclude_filter_regex_create 2>&1
+    | assert_output_true test_costshare__purchase_exclude_filter_regex_create_vendor_name_date_regex'
+
+  assert_true '
+    echo '"'"'BJS .*,10/[[:digit:]]?,100\.00'"'"'
+    | costshare__purchase_exclude_filter_regex_create 2>&1
+    | assert_output_true test_costshare__purchase_exclude_filter_regex_create_vendor_name_date_amt_regex'
+
+  assert_true '
+    test_costshare__purchase_exclude_filter_regex_create_multi_rows
+    | costshare__purchase_exclude_filter_regex_create 2>&1
+    | assert_output_true test_costshare__purchase_exclude_filter_regex_create_multi_rows_expected'
+}
+test_costshare__purchase_exclude_filter_regex_create_override_error(){
+  cat <<override_error
+${assert_REGEX_COMPARE}msgType='Fatal' msg='override this function to exclude certain purchase transactions\.'.*
+${assert_REGEX_COMPARE} .*
+${assert_REGEX_COMPARE} .*
+${assert_REGEX_COMPARE} .*
+${assert_REGEX_COMPARE} .*
+${assert_REGEX_COMPARE} .*
+override_error
+}
+test_costshare__purchase_exclude_filter_regex_create_vendor_name_excluded(){
+cat <<'vendor_name_excluded'
+^Date,[^,]*,Amt
+vendor_name_excluded
+}
+test_costshare__purchase_exclude_filter_regex_create_vendor_name_regex(){
+cat <<'vendor_name_regex'
+^[^,]*,BJS $$.*,[^,]*
+vendor_name_regex
+}
+test_costshare__purchase_exclude_filter_regex_create_vendor_name_date_regex(){
+cat <<'vendor_name_date_regex'
+^10/[[:digit:]]?,BJS .*,[^,]*
+vendor_name_date_regex
+}
+test_costshare__purchase_exclude_filter_regex_create_vendor_name_date_amt_regex(){
+cat <<'vendor_name_date_amt_regex'
+^10/[[:digit:]]?,BJS .*,100\.00
+vendor_name_date_amt_regex
+}
+test_costshare__purchase_exclude_filter_regex_create_multi_rows(){
+cat <<'multi_rows'
+,Date,Amt
+BJS $$.*
+BJS .*,10/[[:digit:]]?,
+BJS .*,10/[[:digit:]]?,100\.00
+multi_rows
+}
+test_costshare__purchase_exclude_filter_regex_create_multi_rows_expected(){
+cat <<'multi_rows'
+^Date,[^,]*,Amt|^[^,]*,BJS $$.*,[^,]*|^10/[[:digit:]]?,BJS .*,[^,]*|^10/[[:digit:]]?,BJS .*,100\.00
+multi_rows
+}
+
+
+test_costshare__purchase_exclude_filter_regex_apply(){
+
+  local filter="$( echo "BJS.*","","" | costshare__purchase_exclude_filter_regex_create )"
+  assert_true '[[ "$filter" == '\''^[^,]*,BJS.*,[^,]*'\'' ]]'
+  assert_true '
+    test_costshare__purchase_exclude_filter_regex_apply_exclude_all_BJS
+    | grep -E -v "$filter" 2>&1
+    | assert_output_true echo "10/10,110 Grill,100.00"'
+
+  local filter="$( echo "","10/10","" | costshare__purchase_exclude_filter_regex_create )"
+  assert_true '[[ "$filter" == '\''^10/10,[^,]*,[^,]*'\'' ]]'
+  assert_true '
+    test_costshare__purchase_exclude_filter_regex_apply_exclude_by_date
+    | grep -E -v "$filter" 2>&1
+    | assert_output_true echo "10/11,BJS Wholesale,50.00"'
+
+  local filter="$( echo '"BJS.*","10/10","100\.00"' | costshare__purchase_exclude_filter_regex_create )"
+  assert_true '[[ "$filter" == '\''^10/10,BJS.*,100\.00'\'' ]]'
+  assert_true '
+    test_costshare__purchase_exclude_filter_regex_apply_exclude_BJS_10_10_100Dollars
+    | grep -E -v "$filter" 2>&1
+    | assert_output_true test_costshare__purchase_exclude_filter_regex_apply_exclude_BJS_10_10_100Dollars_expected'
+
+}
+test_costshare__purchase_exclude_filter_regex_apply_exclude_all_BJS(){
+cat<<'exclude_all_BJS'
+10/10,BJS Gas,100.00
+10/10,110 Grill,100.00
+10/11,BJS Wholesale,50.00
+10/12,BJS Wholesale,51.00
+exclude_all_BJS
+}
+test_costshare__purchase_exclude_filter_regex_apply_exclude_by_date(){
+cat<<'exclude_by_date'
+10/10,BJS Gas,100.00
+10/10,110 Grill,100.00
+10/11,BJS Wholesale,50.00
+10/10,BJS Wholesale,51.00
+exclude_by_date
+}
+test_costshare__purchase_exclude_filter_regex_apply_exclude_by_amt(){
+cat<<'exclude_by_amt'
+10/10,BJS Gas,100.00
+10/10,110 Grill,100.00
+10/11,BJS Wholesale,50.00
+10/10,BJS Wholesale,51.00
+exclude_by_amt
+}
+test_costshare__purchase_exclude_filter_regex_apply_exclude_BJS_10_10_100Dollars(){
+cat<<'exclude_by_amt'
+10/10,BJS Gas,100.00
+10/10,110 Grill,100.00
+10/11,BJS Wholesale,50.00
+10/10,BJS Wholesale,51.00
+exclude_by_amt
+}
+test_costshare__purchase_exclude_filter_regex_apply_exclude_BJS_10_10_100Dollars_expected(){
+cat<<'exclude_BJS_10_10_100Dollars_expected'
+10/10,110 Grill,100.00
+10/11,BJS Wholesale,50.00
+10/10,BJS Wholesale,51.00
+exclude_BJS_10_10_100Dollars_expected
+}
+
+
 test_costshare__purchase_stream_normalize(){
   assert_true '
-    echo "fails, regex"
+    echo "date, missing"
     | costshare__purchase_stream_normalize 2>&1
-    | assert_output_true test_costshare__purchase_stream_normalize_fail_REGEX'
+    | assert_output_true test_costshare__purchase_stream_normalize_date_missing_regex'
   assert_true '
     test_costshare__purchase_stream_normalize_fail_vendor_max_len_input 
     | costshare__purchase_stream_normalize 2>&1
@@ -367,13 +456,13 @@ test_costshare__purchase_stream_normalize(){
     | costshare__purchase_stream_normalize 2>&1
     | assert_output_true echo "10/10/20,Vendor Name,100.00,forwarded fields"'
   assert_true '
-    echo "10/10/2022,Vendor   123  Name,100.00forwarded fields,f2"
+    echo "10/10/2022,Vendor   123  Name,100.00,forwarded fields"",f2"
     | costshare__purchase_stream_normalize 2>&1
-    | assert_output_true echo "10/10/2022,Vendor 123 Name,100.00forwarded fields,f2"'
+    | assert_output_true echo "10/10/2022,Vendor 123 Name,100.00,forwarded fields"",f2"'
 }
-test_costshare__purchase_stream_normalize_fail_REGEX(){
+test_costshare__purchase_stream_normalize_date_missing_regex(){
 cat<<'error'
-Error: failed to match expected format.  costshare__PURCHASE_DATA_FORMAT_REGEX='^([0-1][0-9]/[0-3][0-9](/[0-9][0-9]([0-9][0-9])?)?),([^,]+),([-]?[0-9]+(\.[0-9][0-9])?)(.*)$'. purchaseCnt=0 purchase='fails, regex'
+Error: required field: purchaseDate, vendor name, and/or charge notspecified.. purchaseCnt=0 purchase='date, missing'
 Abort: Purchase entry(s) from purchase stream do not comply with expected format. errorCnt=1
 error
 }
@@ -396,7 +485,7 @@ error
 }
 test_costshare__purchase_stream_normalize_fail_no_leading_zero(){
 cat<<'error'
-Error: failed to match expected format.  costshare__PURCHASE_DATA_FORMAT_REGEX='^([0-1][0-9]/[0-3][0-9](/[0-9][0-9]([0-9][0-9])?)?),([^,]+),([-]?[0-9]+(\.[0-9][0-9])?)(.*)$'. purchaseCnt=0 purchase='10/10,Vendor Name,-.99'
+Error: charge amount does not match expected format.  costshare__PURCHASE_CHARGE_REGEX='(^[-]?[0-9]+(\.[0-9][0-9])?)'. purchaseCnt=0 purchase='10/10,Vendor Name,-.99'
 Abort: Purchase entry(s) from purchase stream do not comply with expected format. errorCnt=1
 error
 }
@@ -439,10 +528,6 @@ costshare_vendor_pct_tbl
 test_costshare__charge_share_compute(){
   test_costshare__charge_share_compute_vendor_pct_tbl
   assert_true '
-    echo "fail,regex,"
-    | costshare__charge_share_compute 2>&1
-    | assert_output_true test_costshare__charge_share_compute_fail_Regex'
-  assert_true '
     echo "10/10,fail vendor name,50.95"
     | costshare__charge_share_compute 2>&1
     | assert_output_true test_costshare__charge_share_compute_fail_vendor_name'
@@ -459,9 +544,9 @@ test_costshare__charge_share_compute(){
     | costshare__charge_share_compute 2>&1
     | assert_output_true echo "Abort: Failed to find vendorName="'"\'BJS fail\'"'" in vendor_pct_table."'
   assert_true '
-    echo "10/10,BJS Warehouse,33.34ForwardedFields"
+    echo "10/10,BJS Warehouse,33.34,ForwardedFields"
     | costshare__charge_share_compute 2>&1
-    | assert_output_true echo "10/10,BJS Warehouse,33.34,20,6.67,26.67ForwardedFields"'
+    | assert_output_true echo "10/10,BJS Warehouse,33.34,20,6.67,26.67,ForwardedFields"'
   assert_true '
     echo "10/10,BJS Warehouse,33.34,ForwardedFields"
     | costshare__charge_share_compute 2>&1
@@ -494,11 +579,33 @@ error
 
 
 test_costshare_charge_share_run(){
+
+  costshare_chase_purchase_exclude_filter_tbl(){
+    #vendorNameRegex,dateRegex,amtRegex
+    #define empty filter for test
+    return
+  }
+
   test_costshare_charge_share_run_vendor_pct_tbl
   assert_true '
     echo "10/10,BJS Warehouse,-33.34,ForwardedFields"
     | costshare_charge_share_run 2>&1
     | assert_output_true echo "10/10,BJS Warehouse,-33.34,20,-6.67,-26.67,ForwardedFields"'
+
+  assert_true '
+    echo "10/10,BJS Ware[house,-33.34,ForwardedFields"
+    | costshare_charge_share_run 2>&1
+    | assert_output_false echo'
+
+  assert_true '
+    echo "10/10,\"BJS Warehouse\",-80.00"
+    | costshare_charge_share_run 2>&1
+    | assert_output_true echo "10/10,BJS Warehouse,-80.00,20,-16.00,-64.00"'
+
+  assert_true '
+    echo "10/10,\"BJS Warehouse\"\"\",-80.00"
+    | costshare_charge_share_run 2>&1
+    | assert_output_true echo "10/10,\"BJS Warehouse\"\"\",-80.00,20,-16.00,-64.00"'
 }
 test_costshare_charge_share_run_vendor_pct_tbl(){
 costshare_vendor_pct_tbl(){
@@ -519,7 +626,6 @@ test_costshare_vendor_fixed_filter(){
     --- \
     costshare_vendor_fixed_filter
 }
-
 test_costshare_vendor_fixed_filter_vendor_pct_tbl(){
 costshare_vendor_pct_tbl(){
 cat <<'costshare_vendor_pct_tbl'
@@ -543,21 +649,18 @@ fixedfilter
 }
 
 
-test_costshare_vendor_pct_tbl(){
-  assert_output_true \
-    echo "Abort: Override the costshare_vendor_pct_tbl to provide the table of vendors and Party 'X' percentage." \
-    --- \
-    costshare_vendor_pct_tbl
-}
-
-
 main(){
   compose_executable "$0"
+
 
   # test_costshare_vendor_pct_tbl should always be after
   # compose because it tests default behavior.  the
   # default is overriden by the other tests.
   test_costshare_vendor_pct_tbl
+  # test_costshare_chase_purchase_exclude_filter_tbl should always
+  # run before any other test that overrides its 
+  # default behavior.
+  test_costshare_chase_purchase_exclude_filter_tbl
 
   test_costshare__error_msg
   test_costshare__embedded_whitespace_replace
@@ -567,6 +670,8 @@ main(){
   test_costshare__vendor_pct_name_encoding_ordering
   test_costshare__vendor_name_length_map
   test_costshare__vendor_pct_tbl_normalize
+  test_costshare__purchase_exclude_filter_regex_create
+  test_costshare__purchase_exclude_filter_regex_apply
   test_costshare__purchase_stream_normalize
   test_costshare__charge_share_pct_get
   test_costshare__charge_share_compute

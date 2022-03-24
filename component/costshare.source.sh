@@ -29,13 +29,15 @@
 ##
 ##  Purpose
 ##    Defines the vendor percentage table used to filter and calculate the
-##    share of a charge owed between two parties.  
+##    share of a charge owed between two parties.  Only purchases with these
+##    vendors are considered.  Vendors that aren't defined in this table
+##    are excluded/ignored.
 ##  Why
 ##    Automates the process of filtering the purchases that two parties agree
 ##    on paying and associating the percentage to be paid by Party 'X' to
 ##    the selected ones.
 ##  Format
-##    The first field in the table is the vendor's name.  
+##    The first field in the table is a vendor's name or a regex of it.  
 ##    This field is delimited by the second one using a comma(,)
 ##    The second filed is the percentage paid by Party 'X'
 ##  Constraints
@@ -68,6 +70,41 @@ costshare_vendor_pct_tbl(){
 cat <<costshare_vendor_pct_tbl
 WHOLE Foods,50 
 costshare_vendor_pct_tbl
+}
+###############################################################################
+##
+##  Purpose
+##    Excludes purchases normally included by "costshare_vendor_pct_tbl".
+##    Each CSV formatted row can define a regex pattern for each input field.
+##    Each 
+##  Why
+##    There may be purchases involving a vendor that are typically shared_
+##    but in certain cases aren't.
+##  Format
+##    Field
+##    - Vendor Name or extended regex.
+##    - Date MM/DD(/(YY|YYYY))? or extended regex.
+##    - Amount or extended regex.
+##    The Vendor Name and Date fields must each be terminated by a comma (,).
+##    Omit a field from matching by either leaving it entirely empty or by 
+##    specifing an empty value using a pair of double quotes ("").  If an
+##    empty value is specified, a comma must terminate the field if a value
+##    is specified for a subsequent field.
+##    Example
+##      Use regex to exclude all purchases from BJS that occurred on 10/10/2022.
+##      BJS.*,10/10/2022                     
+##      Exclude all 110 Grill purchases whose amount is 125.64  Used
+##      '\' to escape decimal point (period) to avert being interperted as 
+##      a regex "match any single character" operator and specified no Date value.
+##      110 Grill,,125\.64
+##      Same as above but used two double quotes("") to omit Date from
+##      match criteria.
+##      110 Grill,"",125\.64
+##
+###############################################################################
+costshare_chase_purchase_exclude_filter_tbl(){
+#vendorNameRegex,dateRegex,amtRegex
+  msg_fatal "override this function to exclude certain purchase transactions."
 }
 ################################ Public API ###################################
 ##
@@ -106,8 +143,9 @@ costshare_vendor_pct_tbl
 ##               [forwardedFields]- (optional) see STDIN above
 ###############################################################################
 costshare_charge_share_run(){
-  costshare__purchase_stream_normalize \
-  | costshare__grep_fixed_filter       \
+  costshare__purchase_stream_normalize             \
+  | costshare__purchase_exclude_filter_regex_apply \
+  | costshare__grep_fixed_filter                   \
   | costshare__charge_share_compute
 }
 ###############################################################################
@@ -157,7 +195,7 @@ costshare_vendor_pct_tbl_normalize(){
 costshare_vendor_fixed_filter(){
   echo -n "'"
   costshare_vendor_pct_tbl_normalize \
-  | awk 'BEGIN { FS = ","; } { print($1)}'
+  | costshare__vendor_fixed_filter
   # simplifies terminating filter.  also, if only entry due to empty costshare
   # table, creates a filter that doesn't match any input vendors. 
   echo DoesNotMatchAnyVendor"'"
@@ -189,7 +227,7 @@ declare -g -r costshare__VENDOR_NAME_TRIM_REGEX='^[[:space:]]*([^[:space:]][^[:s
 #  allow whitespace either before or after vendor name and whole number
 #  percentage.  allows leading and trailing spaces to align values
 #  in a visual column pattern.
-declare -g -r costshare__VENDOR_PCT_TABLE_REGEX='^([^,]+),[[:space:]]*([1-9][0-9]?[0-9]?)[[:space:]]*$'
+declare -g -r costshare__PCT_TABLE_REGEX='^[[:space:]]*([1-9][0-9]?[0-9]?)[[:space:]]*$'
 
 costshare__vendor_pct_tbl_normalize(){
 
@@ -198,16 +236,26 @@ costshare__vendor_pct_tbl_normalize(){
   local -i pct=0
   local -i rowCnt=0
   local -i errorCnt=0
+  local normRow
   while read -r row; do
     (( rowCnt++ ))
-    if ! [[ $row =~ $costshare__VENDOR_PCT_TABLE_REGEX ]]; then
-      costshare__error_msg errorCnt "row" "$rowCnt" "$row" "fails format check costshare__VENDOR_PCT_TABLE_REGEX='$costshare__VENDOR_PCT_TABLE_REGEX'"
+
+    if ! csv_field_get "$row" fieldUnset vendorName pct; then
+      costshare__error_msg errorCnt "row" "$rowCnt" "$row" "fails to conform to basic CSV format"
       continue
     fi
 
-    vendorName=${BASH_REMATCH[1]} 
-    pct=${BASH_REMATCH[2]}
+    if [[ "${fieldUnset}" -ne 0 ]]; then
+      costshare__error_msg errorCnt "row" "$rowCnt" "$row" "both vendor name and share percentage are required"
+      continue
+    fi
+    
+    if ! [[ $pct =~ $costshare__PCT_TABLE_REGEX ]]; then
+      costshare__error_msg errorCnt "row" "$rowCnt" "$row" "invalid percentage format  costshare__PCT_TABLE_REGEX='$costshare__PCT_TABLE_REGEX'"
+      continue
+    fi
 
+    pct=${BASH_REMATCH[1]} 
     if [[ $pct -gt 100 ]]; then
       costshare__error_msg errorCnt "row" "$rowCnt" "$row" "pct=$pct must be =< 100'"
       continue
@@ -219,14 +267,15 @@ costshare__vendor_pct_tbl_normalize(){
     fi
 
     vendorName=${BASH_REMATCH[1]}
-
     if [[ ${#vendorName} -gt $costshare_VENDOR_NAME_LENGTH_MAX ]]; then
       costshare__error_msg errorCnt "row" "$rowCnt" "$row"  "vendor name exceeds costshare_VENDOR_NAME_LENGTH_MAX=$costshare_VENDOR_NAME_LENGTH_MAX. Either override length or truncate vendor name"
       continue
     fi
 
     costshare__embedded_whitespace_replace "$vendorName" vendorName
-    echo "$vendorName","$pct"
+    normRow=''
+    csv_field_append normRow "$vendorName" "$pct"
+    echo "$normRow"
   done
   if [[ $errorCnt -gt 0 ]]; then
     abort "Rows of costshare_vendor_pct_tbl don't comply with expected format. errorCnt=$errorCnt"
@@ -235,9 +284,146 @@ costshare__vendor_pct_tbl_normalize(){
 ###############################################################################
 ##
 ##  Purpose
-##    Creates serialized form of the costshare_vendor_pct_tbl_normalize that conforms to the bash
-##    syntax needed to assign an associative array's key/value pairs to a
-##    bash asssociative array.
+##    Helps create a 'grep' compliant fixed filter to select the purchases
+##    broker by specific vendors.
+##  Why
+##    CSV format encapsulates vendor names that may contain a comma.  Without 
+##    encapsulation, the comma becomes a delimiter dividing the name into two
+##    distinct fields.  Therefore CSV parsing is required to preserve the
+##    entire name.
+##  In
+##    STDIN - CSV formatted row with following fields in the order presented:
+##              Vendor Name - (required) An exact or partial name.
+##            Subsequent fields will be ignored. 
+##  Out
+##    STDOUT - Streams a vendor name absent its encapsulating quotes.
+##
+###############################################################################
+costshare__vendor_fixed_filter(){
+
+  local vendor
+  local -i unsetFieldCnt
+  local vendorName  
+  while read -r vendor; do
+
+    if ! csv_field_get "$vendor" unsetFieldCnt vendorName; then 
+      abort 'invalid CSV format vendor='"$vendor"
+    fi
+  
+    if [[ $unsetFieldCnt -gt 0 ]] \
+    || [[ -z "$vendorName" ]]; then
+      continue
+    fi
+
+    echo "$vendorName"
+
+  done
+}
+###############################################################################
+##
+##  Purpose
+##    Create a an extended regex filter to exclude purchases normally
+##    included by "costshare_vendor_pct_tbl".  
+##  Why
+##    Sometimes parties agree not to share the cost of a specific purchase
+##    from a vendor that they usually cost share.
+##  In
+##    STDIN - CSV formatted row with following fields:
+##              Vendor Name Regex - (optional) An exact name or regex.
+##              Date Regex        - (optional) An exact date in MM/DD(/YY|YYYY)? or regex.
+##              Amount Regex      - (optional) An exact amount or regex.
+##            At least one of the above fields must be specified.
+##            When combined, the regex of these fields identify the purchase(s)
+##            to specifically exclude.
+##  Out
+##    STDOUT - Each input row is combined into a single, extended regular
+##             expression using the "or" operator.
+###############################################################################
+costshare__purchase_exclude_filter_regex_create(){
+
+  local vendorNameRegex
+  local dateRegex
+  local amtRegex
+  local exclude
+  local regex
+  local -i fieldUnset=0
+  local -i excludeCnt=0
+  while read -r exclude; do
+
+    (( excludeCnt++ ))
+
+    vendorNameRegex=''
+    dateRegex=''
+    amtRegex=''
+    if ! csv_field_get "$exclude" fieldUnset  vendorNameRegex dateRegex amtRegex; then
+      msg_fatal "problem reading exclude filter exclude='$exclude' excludeCnt=$excludeCnt"
+    fi 
+
+    if [[ "$fieldUnset" -gt 2   ]]; then
+      msg_fatal "Exclude request must include at least one regex expression. exclude='$exclude' excludeCnt=$excludeCnt "
+    fi
+
+    if [[ -z "$vendorNameRegex" ]]; then
+      # create filter to skip over this field
+      vendorNameRegex='[^,]*'
+    fi
+
+    if [[ -z "$dateRegex" ]]; then
+      # create filter to skip over this field
+      dateRegex='[^,]*'
+    fi
+
+    if [[ -z "$amtRegex" ]]; then
+      # create filter to skip over this field
+      amtRegex='[^,]*'
+    fi
+
+    regex+="^${dateRegex},${vendorNameRegex},${amtRegex}|"
+
+  done
+  if [[ -n "$regex" ]]; then
+    # eliminate dangling "or" operator at end of the regex
+    echo "${regex:0:${#regex}-1}"
+  fi
+}
+###############################################################################
+##
+##  Purpose
+##    Excludes purchases normally cost shared by applying a filter, generated
+##    from costshare_chase_purchase_exclude_filter_tbl.   
+##  Why
+##    Sometimes parties agree not to share the cost of a specific purchase
+##    from a vendor that they usually cost share.
+##  In
+##    STDIN - Conforms to CSV purchase format (interface) accepted by
+##            costshare_charge_share_run.
+##    costshare_chase_purchase_exclude_filter_tbl
+##            A function that provides regular expressions via STDIN from
+##            a table.  
+##  Out
+##    STDOUT - bash associative array syntax where the "key" is the vendor name
+##             while its value is Party 'X''s percentage.
+###############################################################################
+costshare__purchase_exclude_filter_regex_apply(){
+
+  local -r regexfilter="$( costshare_chase_purchase_exclude_filter_tbl | costshare__purchase_exclude_filter_regex_create )"
+  if [[ $? -ne 0 ]]; then
+    exit 1
+  fi
+
+  if [[ -z "$regexFilter" ]]; then
+    tee
+    return
+  fi 
+
+  grep -E -v "$regexfilter"
+}
+###############################################################################
+##
+##  Purpose
+##    Creates serialized form of the costshare_vendor_pct_tbl_normalize that
+##    conforms to the bash syntax needed to assign an associative array's
+##    key/value pairs to a bash asssociative array.
 ##  Why
 ##    Facilitates searching by using the vendor name, or a portion of it, to
 ##    both identify transactions of interest and compute the appropriate share
@@ -250,7 +436,29 @@ costshare__vendor_pct_tbl_normalize(){
 ###############################################################################
 costshare__vendor_pct_map_create(){
   costshare_vendor_pct_tbl_normalize \
-  | awk 'BEGIN { FS = ","; print "(" } ; { print "[\""$1"\"]" "=" "\""$2"\""}; END { print ")" }'
+  | costshare__vendor_pct_map_syntax_gen
+}
+costshare__vendor_pct_map_syntax_gen(){
+  local vendorPct
+  local vendorName
+  local pct
+  local -A vendorMap
+  local -i unsetFieldCnt
+  while read -r vendorPct; do
+
+    if ! csv_field_get "$vendorPct" unsetFieldCnt vendorName pct; then
+      exit 1
+    fi
+ 
+    if [[ $unsetFieldCnt -gt 0 ]]; then
+      continue
+    fi 
+
+    vendorMap["$vendorName"]="$pct"
+
+  done
+  local -r vendorMapSerialized=$(typeset -p vendorMap)
+  echo ${vendorMapSerialized#declare -A vendorMap=}
 }
 ###############################################################################
 ##
@@ -333,28 +541,13 @@ costshare__vendor_pct_name_encoding_ordering(){
   fi
 }
 
-# require at least MM/DD but allow for MM/DD/YY or YYYY. date is not processed by
-# this component therefore accept a couple variations 
-declare -g -r costshare__PURCHASE_DATE_REGEX='([0-1][0-9]/[0-3][0-9](/[0-9][0-9]([0-9][0-9])?)?)'
-# accept any characters except a comma inside a vendor name.
-declare -g -r costshare__PURCHASE_VENDOR_NAME_REGEX='([^,]+)'
-# requires a number of at least 1 digit to left of decimal. If decimal point specified, 2
-# decimal places must be specified.  Allows for reimbursement as a negative charge amount.
-declare -g -r costshare__PURCHASE_CHARGE_REGEX='([-]?[0-9]+(\.[0-9][0-9])?)'
-# allow other data, not used by this component, to pass through as part of its stream.
-# provides means to easily add processes that execute before or after this one   
-declare -g -r costshare__PURCHASE_FORWARD_REGEX='(.*)$'
-# purposely anchored only the fields required by this module so they must appear at the
-# start of the purchase data.
-declare -g -r costshare__PURCHASE_DATA_FORMAT_REGEX='^'\
-"$costshare__PURCHASE_DATE_REGEX"','\
-"$costshare__PURCHASE_VENDOR_NAME_REGEX"','\
-"$costshare__PURCHASE_CHARGE_REGEX"\
-"$costshare__PURCHASE_FORWARD_REGEX" 
-declare -g -i -r costshare__PURCHASE_DATE_IDX=1
-declare -g -i -r costshare__PURCHASE_VENDOR_NAME_IDX=4
-declare -g -i -r costshare__PURCHASE_CHARGE_IDX=5
-declare -g -i -r costshare__PURCHASE_FORWARD_IDX=7
+# purchase date enables filtering by this component, require at least MM/DD
+# but allow for MM/DD/YY or YYYY.
+declare -g -r costshare__PURCHASE_DATE_REGEX='(^[0-1][0-9]/[0-3][0-9](/[0-9][0-9]([0-9][0-9])?)?)'
+# requires at least 1 digit to left of decimal. If decimal point specified, 2
+# decimal places must be specified.  A charge is positive while a 
+# refund/reimbursement is represented as a negative charge amount.
+declare -g -r costshare__PURCHASE_CHARGE_REGEX='(^[-]?[0-9]+(\.[0-9][0-9])?)'
 
 costshare__purchase_stream_normalize(){
 
@@ -362,48 +555,71 @@ costshare__purchase_stream_normalize(){
   local purchaseDate
   local vendorName
   local charge
+  local $csv_field_REMAINDER
   local forwardFields
-  local chargeNumStart
+  local normRow
+  local -i unsetFieldCnt
+  local -i chargeNumStart
   local -i purchaseCnt=0
   local -i errorCnt=0
   while read -r purchase; do
-
-    if ! [[ $purchase =~ $costshare__PURCHASE_DATA_FORMAT_REGEX ]]; then
-      costshare__error_msg errorCnt "purchase" "$purchaseCnt" "$purchase" "failed to match expected format.  costshare__PURCHASE_DATA_FORMAT_REGEX='$costshare__PURCHASE_DATA_FORMAT_REGEX'"
+ 
+    # any fields after the required ones are optional.  since they might not exist
+    # (re)set the remainder field to empty string.
+    eval $csv_field_REMAINDER=\'\'
+    if ! csv_field_get "$purchase" unsetFieldCnt purchaseDate vendorName charge $csv_field_REMAINDER 2>/dev/null; then
+      costshare__error_msg errorCnt "purchase" "$purchaseCnt" "$purchase" "does not comply with basic CSV format."
       continue
     fi
 
-    purchaseDate="${BASH_REMATCH[$costshare__PURCHASE_DATE_IDX]}"
-    vendorName="${BASH_REMATCH[$costshare__PURCHASE_VENDOR_NAME_IDX]}"
-    charge=${BASH_REMATCH[$costshare__PURCHASE_CHARGE_IDX]}
-    forwardFields="${BASH_REMATCH[$costshare__PURCHASE_FORWARD_IDX]}"
+    if [[ $unsetFieldCnt -gt 1 ]]; then
+      costshare__error_msg errorCnt "purchase" "$purchaseCnt" "$purchase" "required field: purchaseDate, vendor name, and/or charge notspecified."
+      continue
+    fi
+      
+    if ! [[ $purchaseDate =~ $costshare__PURCHASE_DATE_REGEX ]]; then
+      costshare__error_msg errorCnt "purchase" "$purchaseCnt" "$purchase" "date does not match expected format.  costshare__PURCHASE_DATE_REGEX='$costshare__PURCHASE_DATE_REGEX'"
+      continue
+    fi
 
     if ! [[ $vendorName =~ $costshare__VENDOR_NAME_TRIM_REGEX ]]; then
       costshare__error_msg errorCnt "purchase" "$purchaseCnt" "$purchase"  "vendor name fails costshare__VENDOR_NAME_TRIM_REGEX='$costshare__VENDOR_NAME_TRIM_REGEX'"
       continue
     fi
-
     vendorName=${BASH_REMATCH[1]}
 
     if [[ ${#vendorName} -gt $costshare_VENDOR_NAME_LENGTH_MAX ]]; then
       costshare__error_msg errorCnt "purchase" "$purchaseCnt" "$purchase"  "vendor name exceeds costshare_VENDOR_NAME_LENGTH_MAX=$costshare_VENDOR_NAME_LENGTH_MAX. Either override length or truncate vendor name"
       continue
     fi
-
-    chargeNumStart=0
-    if [[ "${charge:0:1}" == '-' ]]; then chargeNumStart=1; fi
-    if [[ "${charge:$chargeNumStart:1}"   == '0' ]] \
-    && [[ "${charge:$chargeNumStart+1:1}" != '.' ]]; then
-      costshare__error_msg errorCnt "purchase" "$purchaseCnt" "$purchase"  "Charges cannot start with '0' when charge/refund greater than 0.99."
-      continue
-    fi
-
     # applying this function unifies the vendor name semantics
     # between the costshare__vendor_pct_tbl and purchase stream.
     # permits their comparision or use as hash values.
     costshare__embedded_whitespace_replace "$vendorName" vendorName
 
-    echo "$purchaseDate","$vendorName","$charge""$forwardFields"
+    if ! [[ "$charge" =~ $costshare__PURCHASE_CHARGE_REGEX ]]; then
+      costshare__error_msg errorCnt "purchase" "$purchaseCnt" "$purchase" "charge amount does not match expected format.  costshare__PURCHASE_CHARGE_REGEX='$costshare__PURCHASE_CHARGE_REGEX'"
+      continue
+    fi
+
+    chargeNumStart=0
+    if [[ "${charge:0:1}" == '-' ]]; then chargeNumStart=1; fi
+    if [[ "${charge:$chargeNumStart:1}" == '0' ]] \
+    && [[ "${charge:$chargeNumStart:2}" != '0.' ]]; then
+      costshare__error_msg errorCnt "purchase" "$purchaseCnt" "$purchase"  "Charges cannot start with '0' when charge/refund greater than 0.99."
+      continue
+    fi
+
+    eval forwardFields\=\"\$$csv_field_REMAINDER\"
+    if [[ -n "$forwardFields" ]]; then
+      # forwarded fields must be prefixed by
+      # comma to maintain CSV spec for charge field.
+      forwardFields=",$forwardFields"
+    fi
+
+    normRow=''
+    csv_field_append normRow "$purchaseDate" "$vendorName" "$charge"
+    echo "$normRow"$forwardFields
 
   done
   if [[ $errorCnt -gt 0 ]]; then
@@ -417,12 +633,14 @@ costshare__embedded_whitespace_replace(){
 
   # convert a tab to space so a tab before or after a space
   # or consecutive tabs looks like consecutive spaces.
-  stringIn="${stringIn//\	/\ }"
+  local -r tab='	'
+  local -r space=' '
+  stringIn="${stringIn//$tab/$space}"
 
   local stringPrev
   while [[ "$stringIn" != "$stringPrev" ]]; do
     stringPrev="$stringIn"
-    stringIn="${stringIn//\ \ /\ }"
+    stringIn="${stringIn//$space$space/$space}"
   done
 
   stringRtn=$stringIn
@@ -441,17 +659,16 @@ costshare__charge_share_compute(){
   local forwardFields
   local vendorRoot
   local vendorSubtypeLens
+  local $csv_field_REMAINDER
   while read -r purchase; do
 
-    if ! [[ $purchase =~ $costshare__PURCHASE_DATA_FORMAT_REGEX ]]; then
-      abort 'Purchase data fails costshare__PURCHASE_DATA_FORMAT_REGEX='"'""$costshare__PURCHASE_DATA_FORMAT_REGEX""'"'purchase='"'""$purchase""'"
+    # any fields after the required ones are optional.  since they might not exist
+    # (re)set the remainder field to empty string.
+    eval $csv_field_REMAINDER=\'\'
+    if ! csv_field_get "$purchase" unsetFieldCnt purchaseDate vendorName charge $csv_field_REMAINDER 2>/dev/null; then
+      abort 'Purchase data fails basic CSV spec. purchase='"'""$purchase""'"
     fi
-
-    purchaseDate="${BASH_REMATCH[$costshare__PURCHASE_DATE_IDX]}"
-    vendorName="${BASH_REMATCH[$costshare__PURCHASE_VENDOR_NAME_IDX]}"
-    charge=${BASH_REMATCH[$costshare__PURCHASE_CHARGE_IDX]}
-    forwardFields="${BASH_REMATCH[$costshare__PURCHASE_FORWARD_IDX]}"
-
+    
     vendorRoot=${vendorName%% *}
     vendorSubtypeLens=${vendorNameLen[$vendorRoot]}
     if [[ -z "$vendorSubtypeLens" ]]; then
@@ -476,7 +693,16 @@ costshare__charge_share_compute(){
       abort "Failed to compute proper share amounts for purchase='$purchase' "
     fi
 
-    echo "$purchaseDate","$vendorName",$charge,$partyXpct,$sharePartyXRound,$sharePartyY"$forwardFields"
+    eval forwardFields\=\"\$$csv_field_REMAINDER\"
+    if [[ -n "$forwardFields" ]]; then
+      # forwarded fields must be prefixed by
+      # comma to maintain CSV spec for charge field.
+      forwardFields=",$forwardFields"
+    fi
+
+    local purchaseShare=''
+    csv_field_append purchaseShare "$purchaseDate" "$vendorName" "$charge" "$partyXpct" "$sharePartyXRound" "$sharePartyY"
+    echo "$purchaseShare$forwardFields"
 
   done
 }
