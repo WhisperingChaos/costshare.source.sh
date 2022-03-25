@@ -163,19 +163,10 @@ test_costshare__vendor_pct_map_create(){
     echo 1Root Vendor,20
     echo 2Root Vendor,30
   }
-  assert_output_true \
-    test_costshare__vendor_pct_map_create_output_1 \
-    --- \
-   costshare__vendor_pct_map_create
-}
-test_costshare__vendor_pct_map_create_output_1(){
-  # note GNU bash changed behavior of typeset -p in at least version 5.0, it
-  # no longer encapsulates serialized map in single quotes, instead, it
-  # simply escapes characters that would cause substitution during evaluation 
-  # this is why [']? is used at start and end
-cat <<test_costshare__vendor_pct_map_create_output_1
-${assert_REGEX_COMPARE}[']?\(\["1Root Vendor"\]\="20" \["2Root Vendor"\]\="30" \)[']?
-test_costshare__vendor_pct_map_create_output_1
+  eval local \-A vendorMap\=$( costshare__vendor_pct_map_create )
+  assert_true '[[ "${vendorMap["1Root Vendor"]}" == "20" ]]'
+  assert_true '[[ "${vendorMap["2Root Vendor"]}" == "30" ]]'
+  assert_true '[[ ${#vendorMap[@]} -eq 2 ]]'
 }
 
 
@@ -205,19 +196,16 @@ test_costshare__vendor_pct_name_encoding_ordering(){
 
 test_costshare__vendor_name_length_map(){
 
-  assert_output_true \
-    test_costshare__vendor_name_length_map_root_expected \
-    --- \
-    test_costshare_pipe
-}
-test_costshare__vendor_name_length_map_root_expected(){
-  # note GNU bash changed behavior of typeset -p in at least version 5.0, it
-  # no longer encapsulates serialized map in single quotes, instead, it
-  # simply escapes characters that would cause substitution during evaluation 
-  # this is why [']? is used at start and end
-cat<<map_root_expected
-${assert_REGEX_COMPARE}[']?\(\[Root1\]\=" 13" \[Root2\]\=" 14" \[Root3\]\=" 15" \[Root4\]\=" 14" \[Root5\]=" 32" \[Root6\]=" 66" \)[']?
-map_root_expected
+  eval local \-A nameLenMap\=$( test_costshare_vendor_pct_tbl_vendor_name_length_map | costshare__vendor_name_length_map )
+  assert_true '[[ "${nameLenMap[Root1]}" == " 13" ]]'
+  assert_true '[[ "${nameLenMap[Root2]}" == " 14" ]]'
+  assert_true '[[ "${nameLenMap[Root3]}" == " 15" ]]'
+  assert_true '[[ "${nameLenMap[Root4]}" == " 14" ]]'
+  assert_true '[[ "${nameLenMap[Root5]}" == " 32" ]]'
+  assert_true '[[ "${nameLenMap[Root6]}" == " 66" ]]'
+
+  assert_true '[[ ${#nameLenMap[@]} -eq 6 ]]' 
+
 }
 test_costshare_vendor_pct_tbl_vendor_name_length_map(){
 cat <<'test_costshare_vendor_pct_tbl_vendor_name_length_map'
@@ -231,9 +219,6 @@ Root6 ~ ! # $ % ^ & ( ) _ - + = ] [ | \ " ' | ? . / < > $s * : end,60
 test_costshare_vendor_pct_tbl_vendor_name_length_map
 }
 
-test_costshare_pipe(){
-  test_costshare_vendor_pct_tbl_vendor_name_length_map | costshare__vendor_name_length_map
-}
 
 test_costshare__vendor_pct_tbl_normalize(){
 
