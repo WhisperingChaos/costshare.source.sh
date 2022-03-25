@@ -1,4 +1,4 @@
-# [costshare](./component/costshare.source.sh)
+# [costshare.source.sh](./component/costshare.source.sh)
 A [component](https://github.com/WhisperingChaos/SOLID_Bash#component-composition) that consumes: 
 - a required CSV formated stream of purchases/refunds and
 - a required vendor table in CSV format which defines one or more rows defining a vendor name and the percentage to be paid by one of the parties and
