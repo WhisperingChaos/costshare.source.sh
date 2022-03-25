@@ -1,3 +1,5 @@
+[![Actions Status](https://github.com/whisperingchaos/costshare.source.sh/workflows/test/badge.svg)](https://github.com/WhisperingChaos/costshare.source.sh/actions)
+
 # [costshare.source.sh](./component/costshare.source.sh)
 A [component](https://github.com/WhisperingChaos/SOLID_Bash#component-composition) that consumes: 
 - a required CSV formated stream of purchases/refunds and
