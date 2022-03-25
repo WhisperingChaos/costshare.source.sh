@@ -23,7 +23,7 @@ Given these inputs, the component will apportion the cost/reimbursement between 
 
 ### API
 #### costshare_charge_share_run
-https://github.com/WhisperingChaos/costshare.source.sh/blob/a50c24a0f5171d2cae5c8c78deb2b5482573e9f8/component/costshare.source.sh#L135-L185
+https://github.com/WhisperingChaos/costshare.source.sh/blob/a50c24a0f5171d2cae5c8c78deb2b5482573e9f8/component/costshare.source.sh#L135-L171
 
 Before calling this function to calculate the shared charge amounts 
 
