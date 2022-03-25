@@ -3,7 +3,7 @@ compose_executable(){
   local -r callFromDir="$( dirname "$1" )"
 
   local -r callSourcer="$callFromDir"'/config_sh/vendor/sourcer/sourcer.sh'
-  local -r myRoot="$callFromDir"'/costshare_test_sh'
+  local -r myRoot="$callFromDir"'/costshare_source_test_sh'
   local mod
   for mod in $( "$callSourcer" "$myRoot"); do
     source "$mod"
