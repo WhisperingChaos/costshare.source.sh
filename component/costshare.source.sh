@@ -29,46 +29,55 @@
 ##
 ##  Purpose
 ##    Defines the vendor percentage table used to filter and calculate the
-##    share of a charge owed between two parties.  Only purchases with these
-##    vendors are considered.  Vendors that aren't defined in this table
-##    are excluded/ignored.
+##    share amount of a purchase owed between two parties: Party 'X' and
+##    Party 'Y'.
+##    
+##    Filtering selects only those purchases whose Vendor Names appear in
+##    this table.  A "grep" "fixed string" comparision is performed between
+##    each Vendor Name in this table and the one appearing in a purchase.  If
+##    the fixed string comparison succeeds the purchase is selected for 
+##    further processing.  Note, fixed string evaluation compares all characters
+##    according to their character values, therefore, a character's case
+##    affects the comparison outcome and regular expressions are unsupported.
 ##  Why
-##    Automates the process of filtering the purchases that two parties agree
-##    on paying and associating the percentage to be paid by Party 'X' to
-##    the selected ones.
+##    Automates the process of filtering the purchases and calculating
+##    what each party owes.
 ##  Format
-##    The first field in the table is a vendor's name or a regex of it.  
-##    This field is delimited by the second one using a comma(,)
-##    The second filed is the percentage paid by Party 'X'
+##    Must conform to CSV format:
+##
+##     <Vendor Name>,<Party 'X' Percentage>
+##
+##     Must use double quotes to encapsulate Vendor Name when it contains
+##     the CSV delimiter characters: double quotes or commas.
+##     Whitespace can be used to visually align the column values.  Whitespace
+##     will be eliminated from each side of a field value.  Also, repeated,
+##     embedded whitespace will be replaced by a single "space" character.
 ##  Constraints
 ##    Vendor Name
-##    - Must be capitalized in the same manner as specified on the statement.
-##    - It can contain a whitespace between words.
-##    - A vendor name can be truncated to the first whole word (root word)
-##      as long as the same percentage is applied to all purchases common
-##      to the root.
-##    - A root must be at least 3 characters long.
-##    - A vendor name must be long enough to uniquely associate the proper
-##      percentage that should be paid by Party 'X'.
-##    - A vendor name must not contain double, single, or backtick quotes, nor
-##      commas. Limiting a vendor name's characters to alphabetic and numeric
-##      characters should work.  Also, the process should accomidate characters
-##      like #$@.
-##    - Its length will be truncated to 'costshare_VENDOR_NAME_LENGTH_MAX' to
-##      prevent exploitation/bugs.
+##    - Must be capitalized in the same manner as specified by purchases.
+##    - A partial vendor name can be specified.  However, it must be long
+##      enough to uniquely assign the proper percentage that should be paid
+##      by Party 'X'.  The algorithm selects the percentage 
+##      associated to the longest matching vendor name before considering
+##      shorter ones that share the same first whole word (root word).
+##    - A root word must be at least 3 characters long.
+##    - A vendor name will be truncated to 'costshare_VENDOR_NAME_LENGTH_MAX'
+##      to prevent exploitation/bugs.
 ##    Party 'X' Percentage
 ##    - The percentage of the total charge to be paid by Party 'X'.
 ##    - The share paid by Party 'Y' is the amount that remains after deducting
 ##      the amount owed by Party 'X'.
-##    - Must be a whole number between 0-100.
+##    - Must be a whole number that ranges: 0-100.
 ##
 ###############################################################################
 costshare_vendor_pct_tbl(){
   costshare__fatal "Override the costshare_vendor_pct_tbl to provide the table of vendors and Party 'X' percentage."
-# Vendor Name, Party 'X' Percentage
 # Heredoc example:
-cat <<costshare_vendor_pct_tbl
-WHOLE Foods,50 
+# <Vendor Name>,<Party 'X' Percentage>
+cat <<'costshare_vendor_pct_tbl'
+WHOLE Foods  ,25
+"BJ'S Gas "  ,50
+110 Grill    ,35
 costshare_vendor_pct_tbl
 }
 ###############################################################################
@@ -76,35 +85,44 @@ costshare_vendor_pct_tbl
 ##  Purpose
 ##    Excludes purchases normally included by "costshare_vendor_pct_tbl".
 ##    Each CSV formatted row can define a regex pattern for each input field.
-##    Each 
 ##  Why
-##    There may be purchases involving a vendor that are typically shared_
+##    There may be purchases involving a vendor that are typically shared
 ##    but in certain cases aren't.
 ##  Format
-##    Field
-##    - Vendor Name or extended regex.
-##    - Date MM/DD(/(YY|YYYY))? or extended regex.
-##    - Amount or extended regex.
-##    The Vendor Name and Date fields must each be terminated by a comma (,).
+##    Must conform to CSV format:
+##
+##     [<Vendor Name>][,<Date>|,][,<Charge>] 
+##
+##    Vendor Name - (optional) extended regex.
+##    Date        - (optional) extended regex.
+##    Charge      - (optional) extended regex.
+##
+##    At least one of the above fields must be specified.
+##    When combined, the regex of these fields identify the purchase(s)
+##    to specifically exclude.
+##
 ##    Omit a field from matching by either leaving it entirely empty or by 
 ##    specifing an empty value using a pair of double quotes ("").  If an
 ##    empty value is specified, a comma must terminate the field if a value
 ##    is specified for a subsequent field.
-##    Example
-##      Use regex to exclude all purchases from BJS that occurred on 10/10/2022.
-##      BJS.*,10/10/2022                     
-##      Exclude all 110 Grill purchases whose amount is 125.64  Used
-##      '\' to escape decimal point (period) to avert being interperted as 
-##      a regex "match any single character" operator and specified no Date value.
-##      110 Grill,,125\.64
-##      Same as above but used two double quotes("") to omit Date from
-##      match criteria.
-##      110 Grill,"",125\.64
 ##
 ###############################################################################
-costshare_chase_purchase_exclude_filter_tbl(){
+costshare_purchase_exclude_filter_tbl(){
 #vendorNameRegex,dateRegex,amtRegex
   costshare__fatal "override this function to exclude certain purchase transactions."
+# Heredoc example:
+# <Vendor Name>,<Date>,<Charge>
+# Row 1: Use regex to exclude all purchases from BJS that occurred on 10/10/2022.
+# Row 2: Exclude all 110 Grill purchases whose amount is 125.64  Used
+#        '\' to escape decimal point (period) to avert being interperted as 
+#        a regex "match any single character" operator and specified no Date value.
+# Row 3: Same as above but used two double quotes("") to omit Date from
+#        match criteria.
+cat <<'costshare_purchase_exclude_filter_tbl'
+BJS.*,10/10/2022
+110 Grill,,125\.64
+110 Grill,"",125\.64
+costshare_purchase_exclude_filter_tbl
 }
 ################################ Public API ###################################
 ##
@@ -118,36 +136,59 @@ costshare_chase_purchase_exclude_filter_tbl(){
 ##
 ##  Purpose
 ##    Extracts the transactions from the input purchase stream whose vendor name
-##    was defined by the "costshare_vendor_pct_tbl", calculates the amount
-##    owed by both Party 'X' and Party 'Y', and streams results. 
+##    was defined by the "costshare_vendor_pct_tbl", optionally excludes certain
+##    selected vendor transactions, calculates the amount owed by both 
+##    Party 'X' and Party 'Y', and streams results. 
 ##  In
-##    STDIN  - newline delimited text/CSV records with format:
-##             "date,vendorName,charge"[forwardedFields].
-##             Where:
-##               date       - (required) MM/DD, MM/DD/YY, or MM/DD/YYY
-##               vendorName - (required) see constraints defined by 'costshare_vendor_pct_tbl'.
-##               cost       - (required) must conform to decimal number with 2
-##                            places of accuracy to right of decimal point. 
-##                            A negative sign can preceed the number and
-##                            produce negative shared cost amount. 
-##               [forwardedFields] - (optional) any data following the two digit
-##                            cost will be forwarded through this component by
+##    STDIN  - newline delimited CSV records with format:
+##
+##             <Date>,<Vendor Name>,<Charge>[,<forwardedFields>]
+##
+##               Date        - (required) MM/DD, MM/DD/YY, or MM/DD/YYY
+##               Vendor Name - (required) see constraints defined by 'costshare_vendor_pct_tbl'.
+##               Charge      - (required) must either be a whole numger or a
+##                            decimal number with 2 places of accuracy to right
+##                            of decimal point.  A negative sign can preceed the
+##                            number and produce negative shared amount. 
+##               [,<forwardedFields>] - (optional) any data, prefixed by a comma,
+##                            following the two digit cost.  This data will be
+##                            forwarded through this component by
 ##                            appending this data to its generated output.
 ##    STDOUT - newline delimited text/CSV records with format:
-##             "date,vendorName,charge,partyXpct,sharePartyXRound,sharePartyY"[forwardedFields]
-##             Where:
-##               partyXpct        - Party 'X' percentage applied to the charge
-##               sharePartyXRound - Calculated Party 'X' portion of the charge
+##
+##             <Date>,<Vendor Name>,<Charge>,<PartyXpct>,<SharePartyXRound>,<SharePartyY>[,forwardedFields]
+##
+##               PartyXpct        - Party 'X' percentage applied to the charge
+##               SharePartyXRound - Calculated Party 'X' portion of the charge
 ##                                  rounded using "unbaised/bankers" rounding method.
-##               sharePartyY      - Calculated Party 'Y' portion of the charge.
-##               [forwardedFields]- (optional) see STDIN above
+##               SharePartyY      - Calculated Party 'Y' portion of the charge.
 ###############################################################################
 costshare_charge_share_run(){
-  costshare__purchase_stream_normalize             \
-  | costshare__purchase_exclude_filter_regex_apply \
-  | costshare__grep_fixed_filter                   \
+  costshare__purchase_stream_normalize              \
+  | costshare__purchase_exclude_filter_regex_apply  \
+  | costshare__grep_fixed_filter                    \
   | costshare__charge_share_compute
 }
+##############################################################################
+##    These constants are part of the public interface and can be changed.
+###############################################################################
+#
+# defines the maximum number of errors, while scanning either the
+# costshare_vendor_pct_tbl or purchase stream, that once exceeded will cause
+# the execution to halt.
+declare -g -i -r costshare_ERROR_THRESHOLD_STOP=10
+#
+# defines the vendor name's maximum length considered by this module for names
+# that appear in the costshare_vendor_pct_tbl and those appearing in the
+# billing/purchase input stream.
+declare -g -i -r costshare_VENDOR_NAME_LENGTH_MAX=256
+
+############################ private implementation ###########################
+#
+#   The code below shouldn't change unless there's a bug.
+#
+###############################################################################
+
 ###############################################################################
 ##
 ##  Purpose
@@ -170,7 +211,7 @@ costshare_charge_share_run(){
 ##             STDOUT of costshare_vendor_pct_tbl function.
 ##    STDOUT - verified and normalized rows of the costshare_vendor_pct_tbl
 ###############################################################################
-costshare_vendor_pct_tbl_normalize(){
+costshare__vendor_pct_tbl_norm_stream(){
   costshare_vendor_pct_tbl \
   | costshare__vendor_pct_tbl_normalize
 }
@@ -184,7 +225,7 @@ costshare_vendor_pct_tbl_normalize(){
 ##    Improves reliability by replacing a statically coded instance
 ##    with a dynamically produced one. 
 ##  In
-##    STDIN  - provided by STDOUT of costshare_vendor_pct_tbl_normalize
+##    STDIN  - provided by STDOUT of costshare__vendor_pct_tbl_norm_stream
 ##    STDOUT - one or more newline delimited entries of normalize vendor names.
 ##             last normalized name is always 'DoesNotMatchAnyVendor' as it
 ##             should not match any vendor names and if the vendor table is 
@@ -192,34 +233,14 @@ costshare_vendor_pct_tbl_normalize(){
 ##             Otherwise, if this filter was truely empty, all purchases would
 ##             be processed.  The above is encapsulated in single quotes.
 ###############################################################################
-costshare_vendor_fixed_filter(){
+costshare__vendor_fixed_filter(){
   echo -n "'"
-  costshare_vendor_pct_tbl_normalize \
-  | costshare__vendor_fixed_filter
+  costshare__vendor_pct_tbl_norm_stream \
+  | costshare__vendor_name_stream
   # simplifies terminating filter.  also, if only entry due to empty costshare
   # table, creates a filter that doesn't match any input vendors. 
   echo DoesNotMatchAnyVendor"'"
 }
-##############################################################################
-##    These constants are part of the public interface and can be changed.
-###############################################################################
-#
-# defines the maximum number of errors, while scanning either the
-# costshare_vendor_pct_tbl or purchase stream, that once exceeded will cause
-# the execution to halt.
-declare -g -i -r costshare_ERROR_THRESHOLD_STOP=10
-#
-# defines the vendor name's maximum length considered by this module for names
-# that appear in the costshare_vendor_pct_tbl and those appearing in the
-# billing/purchase input stream.
-declare -g -i -r costshare_VENDOR_NAME_LENGTH_MAX=256
-
-############################ private implementation ###########################
-#
-#   The code below shouldn't change unless there's a bug.
-#
-###############################################################################
-
 #  vendor name has to start with at least 3 non whitespace characters.
 #  trim spaces before and after a vendor's name but preserve consecutive
 #  whitespace between words of a vendor name.
@@ -284,22 +305,24 @@ costshare__vendor_pct_tbl_normalize(){
 ###############################################################################
 ##
 ##  Purpose
-##    Helps create a 'grep' compliant fixed filter to select the purchases
-##    broker by specific vendors.
+##    Stream only the vendor names from provided CSV string.
 ##  Why
 ##    CSV format encapsulates vendor names that may contain a comma.  Without 
 ##    encapsulation, the comma becomes a delimiter dividing the name into two
 ##    distinct fields.  Therefore CSV parsing is required to preserve the
 ##    entire name.
 ##  In
-##    STDIN - CSV formatted row with following fields in the order presented:
-##              Vendor Name - (required) An exact or partial name.
-##            Subsequent fields will be ignored. 
+##    STDIN - CSV formatted row:
+##
+##            <Vendor Name>[,<SubsequentFields>]
+##
+##            Vendor Name - (required) An exact or partial name.
+##            [,<SubsequentFields>] - (optional) will be ignored. 
 ##  Out
 ##    STDOUT - Streams a vendor name absent its encapsulating quotes.
 ##
 ###############################################################################
-costshare__vendor_fixed_filter(){
+costshare__vendor_name_stream(){
 
   local vendor
   local -i unsetFieldCnt
@@ -328,19 +351,14 @@ costshare__vendor_fixed_filter(){
 ##    Sometimes parties agree not to share the cost of a specific purchase
 ##    from a vendor that they usually cost share.
 ##  In
-##    STDIN - CSV formatted row with following fields:
-##              Vendor Name Regex - (optional) An exact name or regex.
-##              Date Regex        - (optional) An exact date in MM/DD(/YY|YYYY)? or regex.
-##              Amount Regex      - (optional) An exact amount or regex.
-##            At least one of the above fields must be specified.
-##            When combined, the regex of these fields identify the purchase(s)
-##            to specifically exclude.
+##    STDIN - See costshare_purchase_exclude_filter_tbl.
 ##  Out
 ##    STDOUT - Each input row is combined into a single, extended regular
 ##             expression using the "or" operator.
 ###############################################################################
 costshare__purchase_exclude_filter_regex_create(){
 
+  local skipCSVfield='(([^,"]+)|(["](([^"]|(""))*)["]))'
   local vendorNameRegex
   local dateRegex
   local amtRegex
@@ -365,17 +383,17 @@ costshare__purchase_exclude_filter_regex_create(){
 
     if [[ -z "$vendorNameRegex" ]]; then
       # create filter to skip over this field
-      vendorNameRegex='[^,]*'
+      vendorNameRegex="$skipCSVfield"
     fi
 
     if [[ -z "$dateRegex" ]]; then
       # create filter to skip over this field
-      dateRegex='[^,]*'
+      dateRegex="$skipCSVfield"
     fi
 
     if [[ -z "$amtRegex" ]]; then
       # create filter to skip over this field
-      amtRegex='[^,]*'
+      amtRegex="$skipCSVfield"
     fi
 
     regex+="^${dateRegex},${vendorNameRegex},${amtRegex}|"
@@ -390,14 +408,14 @@ costshare__purchase_exclude_filter_regex_create(){
 ##
 ##  Purpose
 ##    Excludes purchases normally cost shared by applying a filter, generated
-##    from costshare_chase_purchase_exclude_filter_tbl.   
+##    from costshare_purchase_exclude_filter_tbl.   
 ##  Why
 ##    Sometimes parties agree not to share the cost of a specific purchase
 ##    from a vendor that they usually cost share.
 ##  In
 ##    STDIN - Conforms to CSV purchase format (interface) accepted by
 ##            costshare_charge_share_run.
-##    costshare_chase_purchase_exclude_filter_tbl
+##    costshare_purchase_exclude_filter_tbl
 ##            A function that provides regular expressions via STDIN from
 ##            a table.  
 ##  Out
@@ -406,7 +424,7 @@ costshare__purchase_exclude_filter_regex_create(){
 ###############################################################################
 costshare__purchase_exclude_filter_regex_apply(){
 
-  local -r regexfilter="$( costshare_chase_purchase_exclude_filter_tbl | costshare__purchase_exclude_filter_regex_create )"
+  local -r regexfilter="$( costshare_purchase_exclude_filter_tbl | costshare__purchase_exclude_filter_regex_create )"
   if [[ $? -ne 0 ]]; then
     exit 1
   fi
@@ -421,7 +439,7 @@ costshare__purchase_exclude_filter_regex_apply(){
 ###############################################################################
 ##
 ##  Purpose
-##    Creates serialized form of the costshare_vendor_pct_tbl_normalize that
+##    Creates serialized form of the costshare__vendor_pct_tbl_norm_stream that
 ##    conforms to the bash syntax needed to assign an associative array's
 ##    key/value pairs to a bash asssociative array.
 ##  Why
@@ -429,13 +447,13 @@ costshare__purchase_exclude_filter_regex_apply(){
 ##    both identify transactions of interest and compute the appropriate share
 ##    amounts for Party 'Y' and Party 'X'.
 ##  In
-##    STDIN - generated by the STDOUT of costshare_vendor_pct_tbl_normalize.
+##    STDIN - generated by the STDOUT of costshare__vendor_pct_tbl_norm_stream.
 ##  Out
 ##    STDOUT - bash associative array syntax where the "key" is the vendor name
 ##             while its value is Party 'X''s percentage.
 ###############################################################################
 costshare__vendor_pct_map_create(){
-  costshare_vendor_pct_tbl_normalize \
+  costshare__vendor_pct_tbl_norm_stream \
   | costshare__vendor_pct_map_syntax_gen
 }
 costshare__vendor_pct_map_syntax_gen(){
@@ -481,14 +499,14 @@ costshare__vendor_pct_map_syntax_gen(){
 ##    "WHOLESALE CLUB" purchases percentage is typically 29% while "FUEL" costs
 ##    are shared at 50%.
 ##  In
-##    STDIN - streamed costshare_vendor_pct_tbl_normalize
+##    STDIN - streamed costshare__vendor_pct_tbl_norm_stream
 ##
 ##  Out
 ##    STDOUT - bash serialized associated map without "declare -A ...".
 ##             Stream begins with "(" and ends with ")"   
 ###############################################################################
 costshare__vendor_name_length_map_create(){
-  costshare_vendor_pct_tbl_normalize \
+  costshare__vendor_pct_tbl_norm_stream \
   | costshare__vendor_name_length_map
 }
 
@@ -728,7 +746,7 @@ costshare__charge_share_pct_get(){
 }
 
 costshare__grep_fixed_filter(){
-  local -r filter="$(costshare_vendor_fixed_filter)"
+  local -r filter="$(costshare__vendor_fixed_filter)"
   # this function was created to encapsulate processing grep
   # and the eval required to properly include fixed strings
   # to simplify the code that uses it.

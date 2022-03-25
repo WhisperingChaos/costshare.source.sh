@@ -20,14 +20,14 @@ test_costshare_vendor_pct_tbl(){
 }
 
 
-test_costshare_chase_purchase_exclude_filter_tbl(){
+test_costshare_purchase_exclude_filter_tbl(){
 
   assert_output_true \
-    test_costshare_chase_purchase_exclude_filter_tbl_fatal_ovrride \
+    test_costshare_purchase_exclude_filter_tbl_fatal_ovrride \
     --- \
-    costshare_chase_purchase_exclude_filter_tbl
+    costshare_purchase_exclude_filter_tbl
 }
-test_costshare_chase_purchase_exclude_filter_tbl_fatal_ovrride(){
+test_costshare_purchase_exclude_filter_tbl_fatal_ovrride(){
 cat <<'fatal_ovrride'
 Abort: override this function to exclude certain purchase transactions.
 fatal_ovrride
@@ -74,13 +74,13 @@ test_costshare__error_msg_threshold_expected_output
 }
 
 
-test_costshare_vendor_pct_tbl_normalize(){
+test_costshare__vendor_pct_tbl_norm_stream(){
 
   test_costshare_vendor_pct_tbl_names_with_whitespace_special_characters
   assert_output_true \
     test_costshare_vendor_pct_tbl_expected \
     --- \
-    costshare_vendor_pct_tbl_normalize
+    costshare__vendor_pct_tbl_norm_stream
 
 }
 test_costshare_vendor_pct_tbl_names_with_whitespace_special_characters(){
@@ -276,7 +276,7 @@ test_costshare__purchase_exclude_filter_regex_create(){
   assert_output_true \
     test_costshare__purchase_exclude_filter_regex_create_override_error  \
     --- \
-    costshare_chase_purchase_exclude_filter_tbl
+    costshare_purchase_exclude_filter_tbl
  
   assert_true '
     echo ",Date,Amt"
@@ -310,17 +310,17 @@ override_error
 }
 test_costshare__purchase_exclude_filter_regex_create_vendor_name_excluded(){
 cat <<'vendor_name_excluded'
-^Date,[^,]*,Amt
+^Date,(([^,"]+)|(["](([^"]|(""))*)["])),Amt
 vendor_name_excluded
 }
 test_costshare__purchase_exclude_filter_regex_create_vendor_name_regex(){
 cat <<'vendor_name_regex'
-^[^,]*,BJS $$.*,[^,]*
+^(([^,"]+)|(["](([^"]|(""))*)["])),BJS $$.*,(([^,"]+)|(["](([^"]|(""))*)["]))
 vendor_name_regex
 }
 test_costshare__purchase_exclude_filter_regex_create_vendor_name_date_regex(){
 cat <<'vendor_name_date_regex'
-^10/[[:digit:]]?,BJS .*,[^,]*
+^10/[[:digit:]]?,BJS .*,(([^,"]+)|(["](([^"]|(""))*)["]))
 vendor_name_date_regex
 }
 test_costshare__purchase_exclude_filter_regex_create_vendor_name_date_amt_regex(){
@@ -338,7 +338,7 @@ multi_rows
 }
 test_costshare__purchase_exclude_filter_regex_create_multi_rows_expected(){
 cat <<'multi_rows'
-^Date,[^,]*,Amt|^[^,]*,BJS $$.*,[^,]*|^10/[[:digit:]]?,BJS .*,[^,]*|^10/[[:digit:]]?,BJS .*,100\.00
+^Date,(([^,"]+)|(["](([^"]|(""))*)["])),Amt|^(([^,"]+)|(["](([^"]|(""))*)["])),BJS $$.*,(([^,"]+)|(["](([^"]|(""))*)["]))|^10/[[:digit:]]?,BJS .*,(([^,"]+)|(["](([^"]|(""))*)["]))|^10/[[:digit:]]?,BJS .*,100\.00
 multi_rows
 }
 
@@ -346,14 +346,16 @@ multi_rows
 test_costshare__purchase_exclude_filter_regex_apply(){
 
   local filter="$( echo "BJS.*","","" | costshare__purchase_exclude_filter_regex_create )"
-  assert_true '[[ "$filter" == '\''^[^,]*,BJS.*,[^,]*'\'' ]]'
+  local filterExpect='^(([^,"]+)|(["](([^"]|(""))*)["])),BJS.*,(([^,"]+)|(["](([^"]|(""))*)["]))'
+  assert_true '[[ "$filter" == "$filterExpect" ]]'
   assert_true '
     test_costshare__purchase_exclude_filter_regex_apply_exclude_all_BJS
     | grep -E -v "$filter" 2>&1
     | assert_output_true echo "10/10,110 Grill,100.00"'
 
   local filter="$( echo "","10/10","" | costshare__purchase_exclude_filter_regex_create )"
-  assert_true '[[ "$filter" == '\''^10/10,[^,]*,[^,]*'\'' ]]'
+  local filterExpect='^10/10,(([^,"]+)|(["](([^"]|(""))*)["])),(([^,"]+)|(["](([^"]|(""))*)["]))'
+  assert_true '[[ "$filter" == "$filterExpect" ]]'
   assert_true '
     test_costshare__purchase_exclude_filter_regex_apply_exclude_by_date
     | grep -E -v "$filter" 2>&1
@@ -570,7 +572,8 @@ error
 
 test_costshare_charge_share_run(){
 
-  costshare_chase_purchase_exclude_filter_tbl(){
+
+  costshare_purchase_exclude_filter_tbl(){
     #vendorNameRegex,dateRegex,amtRegex
     #define empty filter for test
     return
@@ -609,14 +612,14 @@ costshare_vendor_pct_tbl
 }
 
 
-test_costshare_vendor_fixed_filter(){
-  test_costshare_vendor_fixed_filter_vendor_pct_tbl
+test_costshare__vendor_fixed_filter(){
+  test_costshare__vendor_fixed_filter_vendor_pct_tbl
   assert_output_true \
-    test_costshare_vendor_fixed_filter_good \
+    test_costshare__vendor_fixed_filter_good \
     --- \
-    costshare_vendor_fixed_filter
+    costshare__vendor_fixed_filter
 }
-test_costshare_vendor_fixed_filter_vendor_pct_tbl(){
+test_costshare__vendor_fixed_filter_vendor_pct_tbl(){
 costshare_vendor_pct_tbl(){
 cat <<'costshare_vendor_pct_tbl'
 BJS x        , 10
@@ -627,7 +630,7 @@ BJS PARTYX   , 100
 costshare_vendor_pct_tbl
 }
 }
-test_costshare_vendor_fixed_filter_good(){
+test_costshare__vendor_fixed_filter_good(){
 cat<<'fixedfilter'
 'BJS x
 BJS Warehouse
@@ -642,19 +645,18 @@ fixedfilter
 main(){
   compose_executable "$0"
 
-
   # test_costshare_vendor_pct_tbl should always be after
   # compose because it tests default behavior.  the
   # default is overriden by the other tests.
   test_costshare_vendor_pct_tbl
-  # test_costshare_chase_purchase_exclude_filter_tbl should always
+  # test_costshare_purchase_exclude_filter_tbl should always
   # run before any other test that overrides its 
   # default behavior.
-  test_costshare_chase_purchase_exclude_filter_tbl
+  test_costshare_purchase_exclude_filter_tbl
 
   test_costshare__error_msg
   test_costshare__embedded_whitespace_replace
-  test_costshare_vendor_pct_tbl_normalize
+  test_costshare__vendor_pct_tbl_norm_stream
   test_costshare__purchase_REGEX
   test_costshare__vendor_pct_map_create
   test_costshare__vendor_pct_name_encoding_ordering
@@ -666,7 +668,7 @@ main(){
   test_costshare__charge_share_pct_get
   test_costshare__charge_share_compute
   test_costshare_charge_share_run
-  test_costshare_vendor_fixed_filter
+  test_costshare__vendor_fixed_filter
 
   assert_return_code_set
 }
