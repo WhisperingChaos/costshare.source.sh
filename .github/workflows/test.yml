@@ -27,8 +27,8 @@ jobs:
       - name: Run a multi-line script
         run: |
           bash --version
-          declare -A map; map[x]="hi there"; declare -p map
-          declare -A map; idx='x'\'\'; map[$idx]=hi; echo ${map[$idx]}; declare -p map
+          #declare -A map; map[x]="hi there"; declare -p map
+          #declare -A map; idx='x'\'\'; map[$idx]=hi; echo ${map[$idx]}; declare -p map
           declare -A map; idx='x'\$\$; map[$idx]=hi; echo ${map[$idx]}; declare -p map
           cd test
           ./config.sh
