@@ -26,6 +26,9 @@ jobs:
       # Runs a set of commands using the runners shell
       - name: Run a multi-line script
         run: |
+          bash --version
+          declare -A map; $map[x]="hi there"; typeset -p map
           cd test
           ./config.sh
           ./costshare.source_test.sh
+          
