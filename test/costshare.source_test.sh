@@ -668,7 +668,7 @@ main(){
   test_costshare__charge_share_compute
   test_costshare_charge_share_run
   test_costshare__vendor_fixed_filter
-  assert_false true
+ 
   assert_return_code_set
 }
 
