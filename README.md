@@ -25,12 +25,12 @@ Given these inputs, the component will apportion the cost/reimbursement between 
 #### costshare_charge_share_run
 https://github.com/WhisperingChaos/costshare.source.sh/blob/a50c24a0f5171d2cae5c8c78deb2b5482573e9f8/component/costshare.source.sh#L135-L171
 
-Before calling this function to calculate the shared charge amounts 
+Before calling this function, at least the [costshare_vendor_pct_tbl](#costshare_vendor_pct_tbl) callback must be overriden. 
 
 #### costshare_purchase_exclude_filter_tbl
 https://github.com/WhisperingChaos/costshare.source.sh/blob/a50c24a0f5171d2cae5c8c78deb2b5482573e9f8/component/costshare.source.sh#L83-L109
 
-[How to override a callback function](https://github.com/WhisperingChaos/SOLID_Bash#function-overriding)
+[How to override a callback function.](https://github.com/WhisperingChaos/SOLID_Bash#function-overriding)
 
 ##### Example
 https://github.com/WhisperingChaos/costshare.source.sh/blob/a50c24a0f5171d2cae5c8c78deb2b5482573e9f8/component/costshare.source.sh#L110-L126
@@ -38,7 +38,7 @@ https://github.com/WhisperingChaos/costshare.source.sh/blob/a50c24a0f5171d2cae5c
 #### costshare_vendor_pct_tbl
 https://github.com/WhisperingChaos/costshare.source.sh/blob/a50c24a0f5171d2cae5c8c78deb2b5482573e9f8/component/costshare.source.sh#L28-L72
 
-[How to override a callback function](https://github.com/WhisperingChaos/SOLID_Bash#function-overriding)
+[How to override a callback function.](https://github.com/WhisperingChaos/SOLID_Bash#function-overriding)
 
 ##### Example
 https://github.com/WhisperingChaos/costshare.source.sh/blob/a50c24a0f5171d2cae5c8c78deb2b5482573e9f8/component/costshare.source.sh#L73-L82
@@ -58,7 +58,7 @@ This component relies on [nameref/name reference feature](https://www.gnu.org/so
 ### Test
 After [installing](#install), change directory to **costshare.source.sh**'s ```test```. Then run:
   * ```./config.sh``` followed by
-  * [**./csv_source_test.sh**](test/csv_source_test.sh).  It should complete successfully and not produce any messages.
+  * [**./costshare.source_test.sh**](test/costshare_source_test.sh).  It should complete successfully and not produce any messages.
 ```
 host:~/Desktop/projects/costshare.source.sh/test$ ./costshare.source_test.sh
 host:~/Desktop/projects/costshare.source.sh/test$ 
