@@ -4,7 +4,7 @@ A [component](https://github.com/WhisperingChaos/SOLID_Bash#component-compositio
 - a required vendor table in CSV format which defines one or more rows defining a vendor name and the percentage to be paid by one of the parties and
 - an optional purchase exclusionary table which discards one or more specific pruchase that would otherwize be included by the vendor table.
 
-Given these inputs, the component will apportion the cost/reimbursement between two parties.
+Given these inputs, the component will apportion a purchase's cost/reimbursement between two parties.
 ## ToC
 [API Index](#api-index)  
 [API](#api)  
