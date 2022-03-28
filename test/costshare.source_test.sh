@@ -230,9 +230,21 @@ test_costshare__vendor_pct_tbl_normalize(){
    | costshare__vendor_pct_tbl_normalize 2>&1
    | assert_output_true test_costshare__vendor_pct_tbl_normalize_fail_pct_le_100'
 
+  assert_true 'echo "v,1"
+   | costshare__vendor_pct_tbl_normalize 2>&1
+   | assert_output_true echo "v,1"'
+
+  assert_true 'echo "v      endor,1"
+   | costshare__vendor_pct_tbl_normalize 2>&1
+   | assert_output_true echo "v endor,1"'
+
   assert_true 'echo "ve ndor,1"
    | costshare__vendor_pct_tbl_normalize 2>&1
-   | assert_output_true test_costshare__vendor_pct_tbl_normalize_fail_trim_regex'
+   | assert_output_true echo "ve ndor,1"'
+
+  assert_true 'echo "   ve n'\''     dor  ,1"
+   | costshare__vendor_pct_tbl_normalize 2>&1
+   | assert_output_true echo "ve n'\'' dor,1"'
 
   assert_true 'test_costshare__vendor_pct_tbl_normalize_fail_vendor_max_len_input
    | costshare__vendor_pct_tbl_normalize 2>&1
@@ -248,12 +260,6 @@ error
 test_costshare__vendor_pct_tbl_normalize_fail_pct_le_100(){
 cat<<'error'
 Error: pct=101 must be =< 100'. rowCnt=1 row='vendor,101'
-Abort: Rows of costshare_vendor_pct_tbl don't comply with expected format. errorCnt=1
-error
-}
-test_costshare__vendor_pct_tbl_normalize_fail_trim_regex(){
-cat<<'error'
-Error: vendor name fails costshare__VENDOR_NAME_TRIM_REGEX='^[[:space:]]*([^[:space:]][^[:space:]][^[:space:]]+([[:space:]]+[^[:space:]]+)*)[[:space:]]*$'. rowCnt=1 row='ve ndor,1'
 Abort: Rows of costshare_vendor_pct_tbl don't comply with expected format. errorCnt=1
 error
 }
@@ -631,12 +637,12 @@ costshare_vendor_pct_tbl
 }
 test_costshare__vendor_fixed_filter_good(){
 cat<<'fixedfilter'
-'BJS x
+BJS x
 BJS Warehouse
 BJS G.a?+s
 110 Grill
 BJS PARTYX
-DoesNotMatchAnyVendor'
+DoesNotMatchAnyVendor
 fixedfilter
 }
 

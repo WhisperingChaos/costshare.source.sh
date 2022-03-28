@@ -231,20 +231,19 @@ costshare__vendor_pct_tbl_norm_stream(){
 ##             should not match any vendor names and if the vendor table is 
 ##             empty, nothing in the input purchase stream will be processed.
 ##             Otherwise, if this filter was truely empty, all purchases would
-##             be processed.  The above is encapsulated in single quotes.
+##             be processed.
 ###############################################################################
 costshare__vendor_fixed_filter(){
-  echo -n "'"
   costshare__vendor_pct_tbl_norm_stream \
   | costshare__vendor_name_stream
-  # simplifies terminating filter.  also, if only entry due to empty costshare
-  # table, creates a filter that doesn't match any input vendors. 
-  echo DoesNotMatchAnyVendor"'"
+  # if the vendor table is empty the created filter  
+  # doesn't match any input vendors.
+  echo DoesNotMatchAnyVendor
 }
-#  vendor name has to start with at least 3 non whitespace characters.
+#  vendor name has to start with at least 1 non whitespace character.
 #  trim spaces before and after a vendor's name but preserve consecutive
 #  whitespace between words of a vendor name.
-declare -g -r costshare__VENDOR_NAME_TRIM_REGEX='^[[:space:]]*([^[:space:]][^[:space:]][^[:space:]]+([[:space:]]+[^[:space:]]+)*)[[:space:]]*$'
+declare -g -r costshare__VENDOR_NAME_TRIM_REGEX='^[[:space:]]*([^[:space:]]([[:space:]]*[^[:space:]]+)*)[[:space:]]*$'
 #  allow whitespace either before or after vendor name and whole number
 #  percentage.  allows leading and trailing spaces to align values
 #  in a visual column pattern.
@@ -746,11 +745,15 @@ costshare__charge_share_pct_get(){
 }
 
 costshare__grep_fixed_filter(){
-  local -r filter="$(costshare__vendor_fixed_filter)"
   # this function was created to encapsulate processing grep
-  # and the eval required to properly include fixed strings
-  # to simplify the code that uses it.
-  eval grep \-\-fixed\-strings "$filter"
+  # and the process substitution mechanism required to properly
+  # include evaluation of fixed strings to simplify the code  
+  # that uses it.  There's something strange about using either
+  # single or double quoted strings that affects the processing
+  # of newline delimited entries in single/double quoted strings.
+  # Also avoids issues of quotes appearing in the specified
+  # filter values within a quoted string.
+  grep --fixed-strings -f <(costshare__vendor_fixed_filter)
 }
 
 costshare__error_msg(){
