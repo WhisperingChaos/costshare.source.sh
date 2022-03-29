@@ -423,7 +423,7 @@ costshare__purchase_exclude_filter_regex_create(){
 ###############################################################################
 costshare__purchase_exclude_filter_regex_apply(){
 
-  local -r regexfilter="$( costshare_purchase_exclude_filter_tbl | costshare__purchase_exclude_filter_regex_create )"
+  local -r regexFilter="$( costshare_purchase_exclude_filter_tbl | costshare__purchase_exclude_filter_regex_create )"
   if [[ $? -ne 0 ]]; then
     exit 1
   fi
@@ -433,7 +433,7 @@ costshare__purchase_exclude_filter_regex_apply(){
     return
   fi 
 
-  grep -E -v "$regexfilter"
+  grep -E -v "$regexFilter"
 }
 ###############################################################################
 ##
