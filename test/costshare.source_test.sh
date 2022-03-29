@@ -552,6 +552,10 @@ test_costshare__charge_share_compute(){
     echo "10/10,BJS Warehouse,-33.34,ForwardedFields"
     | costshare__charge_share_compute 2>&1
     | assert_output_true echo "10/10,BJS Warehouse,-33.34,20,-6.67,-26.67,ForwardedFields"'
+  assert_true '
+    echo "09/03/2021,MARKET BASKET,2.19,Groceries"
+    | costshare__charge_share_compute 2>&1
+    | assert_output_true echo "09/03/2021,MARKET BASKET,2.19,29,0.64,1.55,Groceries"'
 }
 test_costshare__charge_share_compute_vendor_pct_tbl(){
 costshare_vendor_pct_tbl(){
@@ -559,6 +563,7 @@ cat <<'costshare_vendor_pct_tbl'
 BJS Warehouse, 20
 BJS Gas      , 50
 110 Grill    , 29
+MARKET BASKET, 29
 BJS PARTYX   , 100
 costshare_vendor_pct_tbl
 }

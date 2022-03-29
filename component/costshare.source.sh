@@ -699,15 +699,14 @@ costshare__charge_share_compute(){
     local sharePartyX=0
     local sharePartyXRound=$(echo $charge $partyXpct        | awk '{ printf("%.2f",($1*$2/100))}' )
     local sharePartyY=$(     echo $charge $sharePartyXRound | awk '{ printf("%.2f",($1-$2))}')
-    # convert decimal totals to intergers so bash can perform arithmetic instead of awk.
-    # done this way because it should be faster as, a call to awk 
-    # represents a child fork of this process and awk also introduces rounding
-    # error when substracting what it considers floating point numbers.
-    # the rounding error can be "fixed" by multiplying the numbers by 100 so
-    # awk sees them as integers but chose the bash method below.  
-    local -i checkCharge="${charge//./} - ${sharePartyXRound//./} - ${sharePartyY//./}"
-    if [[ $checkCharge -ne 0 ]]; then
-      costshare__fatal "Failed to compute proper share amounts for purchase='$purchase' "
+    # Although one could convert the decimal totals to intergers
+    # allowing bash can perform the checking arithmetic instead of awk,
+    # more complex code must be written to remove leading zeroes
+    # for amounts less than $1.  therefore, use slower call to awk  
+    # to perform floating math.
+    local checkCharge=$( echo  $charge $sharePartyXRound $sharePartyY | awk '{ printf("%.2f",($1-$2-$3))}')
+    if [[ "$checkCharge" != "0.00" ]] && [[ "$checkCharge" != "-0.00" ]]; then
+      costshare__fatal "Failed to compute proper share amounts for purchase='$purchase' sharePartyXRound=$sharePartyXRound  sharePartyY=$sharePartyY checkCharge=$checkCharge"
     fi
 
     eval forwardFields\=\"\$$csv_field_REMAINDER\"
