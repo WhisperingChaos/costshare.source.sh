@@ -83,6 +83,97 @@ costshare_vendor_pct_tbl
 ###############################################################################
 ##
 ##  Purpose
+##    Forwards CSV entries from a CSV stream whose Vendor Names "match"
+##    those in the costshare_vendor_pct_tbl while excluding the non-matching
+##    ones.  Remember a Vendor Name match can occur on a partial (root)
+##    or full name.
+##  Why
+##    Offers a component that uses this one a means determine which
+##    CSV entries this one will accept/reject without exposing this
+##    ones implementation.
+##  In
+##    $1    - Column number of the Vendor Name Field in the streamed CSV entries.
+##    STDIN - Streamed CSV entries containg a Vendor Name Field
+##  Out
+##    STDOUT - Forwarded CSV entries from STDIN whose either full or
+##             partial Vendor Names map onto a Vendor Name define by
+##             the costshare_vendor_pct_tbl.
+###############################################################################
+costshare_purchase_vendor_csv_filter(){
+  local -i -r vendorNamePos=$1
+  local exclude='false'
+  if [[ "$2" == '-v' ]]; then exclude='true'; fi
+  local -r exclude
+
+  local -i -r ignoreRepeat=vendorNamePos-1
+  # declare ignore field local than repeate necessary times.
+  local $( costshare__ignore_field_repeat 1 );local -r csvLeftOfVendorFields="$( costshare__ignore_field_repeat $ignoreRepeat )"
+  local vendorName
+  local purchaseCSV
+  local -i unsetFieldCnt=0
+  local -i errorCnt=0
+  local -i purchaseCnt=0
+  eval local \-\A \-\r vendorPCT=$(costshare__vendor_pct_map_create)
+  eval local \-\A \-\r vendorNameLen=$(costshare__vendor_name_length_map_create)
+  local vendorRoot
+  local vendorSubtypeLens
+  local partyXpct
+  local vendorExists='false'
+  while read -r purchaseCSV; do
+ 
+   (( purchaseCnt++ ))
+
+    if ! eval csv_field_get \"\$purchaseCSV\" unsetFieldCnt $csvLeftOfVendorFields vendorName; then
+      costshare__error_msg errorCnt "purchaseCSV" "$purchaseCnt" "$purchaseCSV"  "invalid CSV format.  purchaseCSV='$purchaseCSV'"
+      continue
+    fi
+
+   if [[ $unsetFieldCnt -ne 0 ]]; then
+      costshare__error_msg errorCnt "purchaseCSV" "$purchaseCnt" "$purchaseCSV"  "missing required vendor name field.  purchaseCSV='$purchaseCSV'"
+      continue
+    fi
+
+    if ! [[ $vendorName =~ $costshare__VENDOR_NAME_TRIM_REGEX ]]; then
+      costshare__error_msg errorCnt "purchaseCSV" "$purchaseCnt" "$purchaseCSV"  "vendor name fails costshare__VENDOR_NAME_TRIM_REGEX='$costshare__VENDOR_NAME_TRIM_REGEX'"
+      continue
+    fi
+
+    vendorName=${BASH_REMATCH[1]}
+    if [[ ${#vendorName} -gt $costshare_VENDOR_NAME_LENGTH_MAX ]]; then
+      costshare__error_msg errorCnt "purchaseCSV" "$purchaseCnt" "$purchaseCSV"  "vendor name exceeds costshare_VENDOR_NAME_LENGTH_MAX=$costshare_VENDOR_NAME_LENGTH_MAX. Either override length or truncate vendor name"
+      continue
+    fi
+   
+    vendorExists='false'
+    while true; do
+    vendorRoot=${vendorName%% *}
+    vendorSubtypeLens=${vendorNameLen[$vendorRoot]}
+    if [[ -z "$vendorSubtypeLens" ]]; then
+      break
+    fi
+
+    costshare__embedded_whitespace_replace "$vendorName" vendorName
+    if ! costshare__charge_share_pct_get vendorPCT "$vendorSubtypeLens" "$vendorName" partyXpct; then
+      break
+    fi
+    vendorExists='true'
+    break
+    done
+    if $vendorExists && $exclude; then
+      continue
+    fi
+
+   if ! $vendorExists && ! $exclude; then
+     continue
+   fi
+
+    echo "$purchaseCSV"
+
+  done
+}
+###############################################################################
+##
+##  Purpose
 ##    Excludes purchases normally included by "costshare_vendor_pct_tbl".
 ##    Each CSV formatted row can define a regex pattern for each input field.
 ##  Why
@@ -693,8 +784,9 @@ costshare__charge_share_compute(){
     fi
 
     local partyXpct=0
-    costshare__charge_share_pct_get vendorPCT "$vendorSubtypeLens" "$vendorName" partyXpct
-
+    if ! costshare__charge_share_pct_get vendorPCT "$vendorSubtypeLens" "$vendorName" partyXpct; then
+        costshare__fatal "Failed to find vendorName='$vendorName' in vendor_pct_table."
+    fi
     # use awk for unbiased rounding to a penny, as bash performs only integer math
     local sharePartyX=0
     local sharePartyXRound=$(echo $charge $partyXpct        | awk '{ printf("%.2f",($1*$2/100))}' )
@@ -740,7 +832,7 @@ costshare__charge_share_pct_get(){
     fi
     shift
   done
-  costshare__fatal "Failed to find vendorName='$vendorName' in vendor_pct_table."
+  return 1
 }
 
 costshare__grep_fixed_filter(){
@@ -775,4 +867,15 @@ costshare__error_msg(){
 costshare__fatal(){
   echo Abort: "$@" >&2
   exit 1
+}
+
+costshare__ignore_field_repeat(){
+  local -i ignoreCnt=$1
+
+  if [[ $ignoreCnt -lt 1 ]]; then
+    return
+  fi
+
+  local -r ignoreSpec='{1..'"$ignoreCnt"'}'
+  eval printf \'ignoreField\ \%\.0s\' $ignoreSpec
 }

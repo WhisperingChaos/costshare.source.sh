@@ -506,10 +506,7 @@ test_costshare__charge_share_pct_get(){
   costshare__charge_share_pct_get vendorPCT "${vendorNameLen[BJS]}" '110 Grill' partyXpct
   assert_true '[[ $partyXpct -eq 29 ]]'
   partyXpct=0
-  assert_output_true \
-    echo 'Abort: Failed to find vendorName='"'110 Grill DC'"' in vendor_pct_table.' \
-    --- \
-    costshare__charge_share_pct_get vendorPCT "${vendorNameLen[BJS]}" '110 Grill DC' partyXpct
+  assert_false 'costshare__charge_share_pct_get vendorPCT "${vendorNameLen[BJS]}" "110 Grill DC" partyXpct'
 }
 test_costshare__charge_share_pct_vendor_tbl(){
 costshare_vendor_pct_tbl(){
@@ -652,6 +649,50 @@ fixedfilter
 }
 
 
+test_costshare_purchase_vendor_csv_filter(){
+
+costshare_vendor_pct_tbl(){
+cat <<'costshare_vendor_pct_tbl'
+BJS WHOLESALE, 20
+costshare_vendor_pct_tbl
+}
+
+ assert_true '
+  test_costshare_purchase_vendor_csv_BJS_only_in | costshare_purchase_vendor_csv_filter 3 2>&1 \
+  --- \
+  | assert_output_true test_costshare_purchase_vendor_csv_BJS_only_out_expected'
+ assert_true '
+  test_costshare_purchase_vendor_csv_exclude_BJS_in | costshare_purchase_vendor_csv_filter 3 -v 2>&1 \
+  --- \
+  | assert_output_true test_costshare_purchase_vendor_csv_exclude_BJS_out_expected'
+}
+test_costshare_purchase_vendor_csv_BJS_only_in(){
+cat<<'csv_BJS_only_in'
+03/02/2021,03/03/2021,BJS WHOLESALE,Groceries,Sale,-20.66,
+03/02/2021,03/03/2021,STOP &amp; SHOP 0546,Groceries,Sale,-20.66,
+03/02/2021,03/03/2021,BJS,Groceries,Sale,-19.50,
+03/02/2021,03/03/2021,INNOVATIONS HAIR SAL,Personal,Sale,-76.00,
+csv_BJS_only_in
+}
+test_costshare_purchase_vendor_csv_BJS_only_out_expected(){
+echo '03/02/2021,03/03/2021,BJS WHOLESALE,Groceries,Sale,-20.66,'
+}
+test_costshare_purchase_vendor_csv_exclude_BJS_in(){
+cat<<'exclude_BJS_in'
+03/02/2021,03/03/2021,BJS WHOLESALE,Groceries,Sale,-20.66,
+03/02/2021,03/03/2021,STOP &amp; SHOP 0546,Groceries,Sale,-20.66,
+03/02/2021,03/03/2021,BJS,Groceries,Sale,-19.50,
+03/02/2021,03/03/2021,INNOVATIONS HAIR SAL,Personal,Sale,-76.00,
+exclude_BJS_in
+}
+test_costshare_purchase_vendor_csv_exclude_BJS_out_expected(){
+cat<<'exclude_BJS_out_expected'
+03/02/2021,03/03/2021,STOP &amp; SHOP 0546,Groceries,Sale,-20.66,
+03/02/2021,03/03/2021,BJS,Groceries,Sale,-19.50,
+03/02/2021,03/03/2021,INNOVATIONS HAIR SAL,Personal,Sale,-76.00,
+exclude_BJS_out_expected
+}
+
 main(){
   compose_executable "$0"
 
@@ -679,6 +720,7 @@ main(){
   test_costshare__charge_share_compute
   test_costshare_charge_share_run
   test_costshare__vendor_fixed_filter
+  test_costshare_purchase_vendor_csv_filter
  
   assert_return_code_set
 }
