@@ -951,14 +951,17 @@ costshare__map_serialize(){
   local -n serializedPtr=$2
 
 typeset -p $1
-return
+
   # using $1 because it's easy
   if ! serializedPtr=$(typeset -p $1); then
     return 1
   fi
 
   serializedPtr=${serializedPtr#declare -A $1=}
+  echo serializedPtr=$serializedPtr
+return 
   local serialMinLen='([A]="a")'
+
   if [[ ${#serializedPtr} -lt ${#serialMinLen} ]]; then
     # empty or problematic associative array values
     return 1
