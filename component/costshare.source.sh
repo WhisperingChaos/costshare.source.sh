@@ -950,6 +950,8 @@ costshare__map_serialize(){
   # associative array variable name: $1
   local -n serializedPtr=$2
 
+typeset -p $1
+return
   # using $1 because it's easy
   if ! serializedPtr=$(typeset -p $1); then
     return 1
