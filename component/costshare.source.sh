@@ -956,7 +956,8 @@ costshare__map_serialize(){
   fi
 
   serializedPtr=${serializedPtr#declare -A $1=}
-  if [[ ${#serializedPtr} -lt 2 ]]; then
+  local serialMinLen='([A]="a")'
+  if [[ ${#serializedPtr} -lt ${#serialMinLen} ]]; then
     # empty or problematic associative array values
     return 1
   fi
