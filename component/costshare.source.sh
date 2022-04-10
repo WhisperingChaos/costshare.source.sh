@@ -950,8 +950,6 @@ costshare__map_serialize(){
   # associative array variable name: $1
   local -n serializedPtr=$2
 
-typeset -p $1
-
   # using $1 because it's easy
   if ! serializedPtr=$(typeset -p $1); then
     return 1
@@ -960,10 +958,7 @@ typeset -p $1
   serializedPtr=${serializedPtr#declare -A $1=}
   # see Note# 3 at end of this module
   serializedPtr=${serializedPtr#declare -A $1}
-  echo serializedPtr=$serializedPtr
-return 
   local serialMinLen='([A]="a")'
-
   if [[ ${#serializedPtr} -lt ${#serialMinLen} ]]; then
     # empty or problematic associative array values
     return 1

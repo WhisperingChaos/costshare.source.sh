@@ -712,13 +712,6 @@ exclude_BJS_out_expected
 
 test_costshare__map_serialize(){
 
-  unset testMap_A
-  local -A testMap_A
-  unset testMap_A_serial
-  local testMap_A_serial
-  costshare__map_serialize testMap_A testMap_A_serial
-  echo $?
-return
   unset    testMap_A
   local -A testMap_A='(["BJS WHOLESALE"]="20" )'
   unset testMap_A_serial
@@ -752,8 +745,7 @@ main(){
   # run before any other test that overrides its 
   # default behavior.
   test_costshare_purchase_exclude_filter_tbl
-test_costshare__map_serialize
-return
+
   test_costshare__error_msg
   test_costshare__embedded_whitespace_replace
   test_costshare__map_serialize
