@@ -958,6 +958,8 @@ typeset -p $1
   fi
 
   serializedPtr=${serializedPtr#declare -A $1=}
+  # see Note# 3 at end of this module
+  serializedPtr=${serializedPtr#declare -A $1}
   echo serializedPtr=$serializedPtr
 return 
   local serialMinLen='([A]="a")'
@@ -1010,4 +1012,8 @@ return
 #      requires calling the subprocess twice, assuming the subprocess performs
 #      identically for each call, first to check its return code and subsequently
 #      to execute combined declaration and assignment.
-#       
+#
+#  3.  Another bash difference between versions 4.3 and at least 5.0, a declared
+#      but unassigned associative array variable will cause typeset -p to generate
+#      an error in bash 4.3.  However, in at least 5.0, instead of an error, 5.0
+#      produces only a declaration without and assignment.         
