@@ -107,14 +107,30 @@ costshare_purchase_vendor_csv_filter(){
 
   local -i -r ignoreRepeat=vendorNamePos-1
   # declare ignore field local than repeate necessary times.
-  local $( costshare__ignore_field_repeat 1 );local -r csvLeftOfVendorFields="$( costshare__ignore_field_repeat $ignoreRepeat )"
+  local $( costshare__ignore_field_repeat 1 )
+  local csvLeftOfVendorFields
+  if ! csvLeftOfVendorFields="$( costshare__ignore_field_repeat $ignoreRepeat )"; then
+    return 1
+  fi
+  local -r csvLeftOfVendorFields
   local vendorName
   local purchaseCSV
   local -i unsetFieldCnt=0
   local -i errorCnt=0
   local -i purchaseCnt=0
-  eval local \-\A \-\r vendorPCT=$(costshare__vendor_pct_map_create)
-  eval local \-\A \-\r vendorNameLen=$(costshare__vendor_name_length_map_create)
+
+  if ! costshare__vendor_pct_map_create >/dev/null; then
+    # See Note: 2 at end of this module
+    return 1
+  fi
+  local -A -r vendorPCT=$(costshare__vendor_pct_map_create)
+
+  if ! costshare__vendor_name_length_map_create >/dev/null; then
+    # See Note: 2 at end of this module
+    return 1
+  fi
+  local -A -r vendorNameLen=$(costshare__vendor_name_length_map_create)
+
   local vendorRoot
   local vendorSubtypeLens
   local partyXpct
@@ -123,6 +139,10 @@ costshare_purchase_vendor_csv_filter(){
  
    (( purchaseCnt++ ))
 
+    # need to eval because $csvLeftOfVendorFields can represent 2 or more arguments.  when it
+    # represents more then one, the expression must be reevaluated to properly delimit the
+    # parameter list into separate parameters. also other substitutions must be protected from
+    # this second evaluation.
     if ! eval csv_field_get \"\$purchaseCSV\" unsetFieldCnt $csvLeftOfVendorFields vendorName; then
       costshare__error_msg errorCnt "purchaseCSV" "$purchaseCnt" "$purchaseCSV"  "invalid CSV format.  purchaseCSV='$purchaseCSV'"
       continue
@@ -255,10 +275,23 @@ costshare_purchase_exclude_filter_tbl
 ##               SharePartyY      - Calculated Party 'Y' portion of the charge.
 ###############################################################################
 costshare_charge_share_run(){
+
+  if ! costshare__vendor_pct_map_create >/dev/null; then
+    # See Note: 2 at end of this module
+    return 1
+  fi
+  local -A -r vendorPCT=$(costshare__vendor_pct_map_create)
+
+  if ! costshare__vendor_name_length_map_create >/dev/null 2>/dev/null; then
+    # See Note: 2 at end of this module
+    return 1
+  fi
+  local -A -r vendorNameLen=$(costshare__vendor_name_length_map_create)
+
   costshare__purchase_stream_normalize              \
   | costshare__purchase_exclude_filter_regex_apply  \
   | costshare__grep_fixed_filter                    \
-  | costshare__charge_share_compute
+  | costshare__charge_share_compute vendorPCT vendorNameLen
 }
 ##############################################################################
 ##    These constants are part of the public interface and can be changed.
@@ -318,18 +351,22 @@ costshare__vendor_pct_tbl_norm_stream(){
 ##  In
 ##    STDIN  - provided by STDOUT of costshare__vendor_pct_tbl_norm_stream
 ##    STDOUT - one or more newline delimited entries of normalize vendor names.
-##             last normalized name is always 'DoesNotMatchAnyVendor' as it
-##             should not match any vendor names and if the vendor table is 
-##             empty, nothing in the input purchase stream will be processed.
+##             last normalized name is always "$costshare__DOES_NOT_MATCH_ANY_VENDOR"
+##             as it should not match any vendor names and if the vendor table 
+##             is empty, nothing in the input purchase stream will be processed.
 ##             Otherwise, if this filter was truely empty, all purchases would
 ##             be processed.
 ###############################################################################
+#  used to create filters that exclude all vendors.
+declare -g -r costshare__DOES_NOT_MATCH_ANY_VENDOR='DoesNotMatchAnyVendor'
+#
+#
 costshare__vendor_fixed_filter(){
   costshare__vendor_pct_tbl_norm_stream \
   | costshare__vendor_name_stream
   # if the vendor table is empty the created filter  
   # doesn't match any input vendors.
-  echo DoesNotMatchAnyVendor
+  echo "$costshare__DOES_NOT_MATCH_ANY_VENDOR"
 }
 #  vendor name has to start with at least 1 non whitespace character.
 #  trim spaces before and after a vendor's name but preserve consecutive
@@ -390,6 +427,9 @@ costshare__vendor_pct_tbl_normalize(){
   done
   if [[ $errorCnt -gt 0 ]]; then
     costshare__fatal "Rows of costshare_vendor_pct_tbl don't comply with expected format. errorCnt=$errorCnt"
+  fi
+  if [[ $rowCnt -lt 1 ]]; then
+    costshare__fatal "costshare_vendor_pct_tbl empty. please add entries to it."
   fi
 }
 ###############################################################################
@@ -514,10 +554,11 @@ costshare__purchase_exclude_filter_regex_create(){
 ###############################################################################
 costshare__purchase_exclude_filter_regex_apply(){
 
-  local -r regexFilter="$( costshare_purchase_exclude_filter_tbl | costshare__purchase_exclude_filter_regex_create )"
-  if [[ $? -ne 0 ]]; then
-    exit 1
+  local regexFilter
+  if ! regexFilter="$( costshare_purchase_exclude_filter_tbl | costshare__purchase_exclude_filter_regex_create )"; then
+    return 1
   fi
+  local -r regexFilter
 
   if [[ -z "$regexFilter" ]]; then
     tee
@@ -555,7 +596,7 @@ costshare__vendor_pct_map_syntax_gen(){
   while read -r vendorPct; do
 
     if ! csv_field_get "$vendorPct" unsetFieldCnt vendorName pct; then
-      exit 1
+      return 1
     fi
  
     if [[ $unsetFieldCnt -gt 0 ]]; then
@@ -565,8 +606,14 @@ costshare__vendor_pct_map_syntax_gen(){
     vendorMap["$vendorName"]="$pct"
 
   done
-  local -r vendorMapSerialized=$(typeset -p vendorMap)
-  echo ${vendorMapSerialized#declare -A vendorMap=}
+  if [[ ${#vendorMap[@]} -lt 1 ]]; then
+    return 1
+  fi
+  local vendorMapSerialized
+  if ! costshare__map_serialize vendorMap vendorMapSerialized; then
+    costshare__fatal "failed to serialize vendorMap."
+  fi
+  echo "$vendorMapSerialized"
 }
 ###############################################################################
 ##
@@ -618,8 +665,14 @@ costshare__vendor_name_length_map(){
     costshare__vendor_pct_name_encoding_ordering lenEncodingNew nameLen "$@"
     nameLenMap[$vendorStartWord]=$lenEncodingNew
   done
-  local -r nameLenSerialized=$(typeset -p nameLenMap)
-  echo ${nameLenSerialized#declare -A nameLenMap=}
+  if [[ ${#nameLenMap[@]} -lt 1 ]]; then
+    return 1
+  fi
+  local nameLenMapSerialize
+  if ! costshare__map_serialize nameLenMap nameLenMapSerialize; then
+    costshare__fatal "failed to serialize nameLenMap."
+  fi
+  echo "$nameLenMapSerialize"
 }
 
 costshare__vendor_pct_name_encoding_ordering(){
@@ -756,9 +809,8 @@ costshare__embedded_whitespace_replace(){
 
 
 costshare__charge_share_compute(){
-
-  eval local \-\A \-\r vendorPCT=$(costshare__vendor_pct_map_create)
-  eval local \-\A \-\r vendorNameLen=$(costshare__vendor_name_length_map_create)
+  local -n vendorPCTptr=$1
+  local -n vendorNameLenPtr=$2
 
   local purchase
   local purchaseDate
@@ -778,13 +830,13 @@ costshare__charge_share_compute(){
     fi
     
     vendorRoot=${vendorName%% *}
-    vendorSubtypeLens=${vendorNameLen[$vendorRoot]}
+    vendorSubtypeLens=${vendorNameLenPtr[$vendorRoot]}
     if [[ -z "$vendorSubtypeLens" ]]; then
       costshare__fatal "Could not determine vendorSubtypeLens for vendorRoot='$vendorRoot' "
     fi
 
     local partyXpct=0
-    if ! costshare__charge_share_pct_get vendorPCT "$vendorSubtypeLens" "$vendorName" partyXpct; then
+    if ! costshare__charge_share_pct_get vendorPCTptr "$vendorSubtypeLens" "$vendorName" partyXpct; then
         costshare__fatal "Failed to find vendorName='$vendorName' in vendor_pct_table."
     fi
     # use awk for unbiased rounding to a penny, as bash performs only integer math
@@ -792,7 +844,7 @@ costshare__charge_share_compute(){
     local sharePartyXRound=$(echo $charge $partyXpct        | awk '{ printf("%.2f",($1*$2/100))}' )
     local sharePartyY=$(     echo $charge $sharePartyXRound | awk '{ printf("%.2f",($1-$2))}')
     # Although one could convert the decimal totals to intergers
-    # allowing bash can perform the checking arithmetic instead of awk,
+    # allowing bash to perform the checking arithmetic instead of awk,
     # more complex code must be written to remove leading zeroes
     # for amounts less than $1.  therefore, use slower call to awk  
     # to perform floating math.
@@ -816,7 +868,7 @@ costshare__charge_share_compute(){
 }
 
 costshare__charge_share_pct_get(){
-  local -r vendorPCTmap=$1
+  local -n vendorPCTptrPtr=$1
   local -r vendorSubtypeLens="$2"
   local -r vendorName="$3"
   local -n partyXpctRTN=$4
@@ -825,7 +877,7 @@ costshare__charge_share_pct_get(){
   set -- $vendorSubtypeLens
   while [[ $# -gt 0 ]]; do
     local subtypeName=${vendorName:0:$1}
-    eval pct\=\$\{$vendorPCTmap\[\$subtypeName\]\}
+    pct=${vendorPCTptrPtr[$subtypeName]}
     if [[ -n $pct ]]; then
       partyXpctRTN=$pct
       return
@@ -879,3 +931,77 @@ costshare__ignore_field_repeat(){
   local -r ignoreSpec='{1..'"$ignoreCnt"'}'
   eval printf \'ignoreField\ \%\.0s\' $ignoreSpec
 }
+###############################################################################
+#
+#  Purpose
+#    Unify Bash associative array serialization format that's different
+#    changes between versions.
+#  Why
+#    See Note 1 at end of this file.
+#  In
+#    $1 - associative array variable name.
+#    $2 - variable name that will receive serialized string output.
+#  Out
+#    $2 - Variable name receiving serialized string output will contain
+#         "typeset -p" syntax modified so it's accepted by current
+#         Bash version.
+###############################################################################
+costshare__map_serialize(){
+  # associative array variable name: $1
+  local -n serializedPtr=$2
+
+  # using $1 because it's easy
+  if ! serializedPtr=$(typeset -p $1); then
+    return 1
+  fi
+
+  serializedPtr=${serializedPtr#declare -A $1=}
+  if [[ ${#serializedPtr} -lt 2 ]]; then
+    # empty or problematic associative array values
+    return 1
+  fi
+  if ! [[ "${serializedPtr:0:1}" == "'" ]]; then
+    # this running Bash version doesn't encapuslate using single quotes
+    return
+  fi
+  # remove encapsulating single quotes
+  serializedPtr=${serializedPtr:1}
+  serializedPtr=${serializedPtr:0:${#serializedPtr}-1}
+}
+###############################################################################
+#
+# Notes:
+#
+#  1.  In older Bash versions, prior at least 5.0, the serialized map
+#      definition was encapsulated in single quotes.  This encapsulation 
+#      technique prevented using the direct assignment of the serialized 
+#      value to a variable.  However, the use of eval as in "eval local..."
+#      removes the encapsulating single quotes resulting in successfully
+#      interperating the value as an associative array, instead of wrongly
+#      adjusting the variable's type to a standarad array with a single
+#      element.  Unfortunately this same eval technique
+#      doesn't work when variable assignment occurs independently after
+#      declaration. In this situation, executing an assignment statement
+#      with serialized key-value pairs encapsulated in single quotes
+#      results in a standard array in which element[0] returns the
+#      serialized associated array string.
+#
+#  2.  There's an issue with using the "local" keyword to declare and assign
+#      a variable value when the value is computed via a subprocess call.  The
+#      the bash "local" function always reports success even when the
+#      subprocess fails (returns non-zero).  Attempted to circumvent this issue
+#      by separating a variable's assignment from its declaration.  Although
+#      encoding assignment after declaration permits independent testing of
+#      the assignment's outcome and reports on the subprocess' success or
+#      failure by affecting assignment's return code, unfortunately, this
+#      decoupled assignment fails to treat the variable as an associative array.
+#      Instead, the variable is considered a standard array, when more
+#      than one keyvalue pair is specified, even though the right side of the 
+#      assignment specifies the serialized format of an associative array.
+#
+#      Given the confluence of behaviors above, perhaps the most reliable method
+#      to detect subprocess errors and properly construct the associative array
+#      requires calling the subprocess twice, assuming the subprocess performs
+#      identically for each call, first to check its return code and subsequently
+#      to execute combined declaration and assignment.
+#       
