@@ -163,7 +163,7 @@ test_costshare__vendor_pct_map_create(){
     echo 1Root Vendor,20
     echo 2Root Vendor,30
   }
-  eval local \-A vendorMap\=$( costshare__vendor_pct_map_create )
+  local -A vendorMap=$(costshare__vendor_pct_map_create)
   assert_true '[[ "${vendorMap["1Root Vendor"]}" == "20" ]]'
   assert_true '[[ "${vendorMap["2Root Vendor"]}" == "30" ]]'
   assert_true '[[ ${#vendorMap[@]} -eq 2 ]]'
@@ -196,7 +196,7 @@ test_costshare__vendor_pct_name_encoding_ordering(){
 
 test_costshare__vendor_name_length_map(){
 
-  eval local \-A nameLenMap\=$( test_costshare_vendor_pct_tbl_vendor_name_length_map | costshare__vendor_name_length_map )
+  local -A -r nameLenMap=$( test_costshare_vendor_pct_tbl_vendor_name_length_map | costshare__vendor_name_length_map )
   assert_true '[[ "${nameLenMap[Root1]}" == " 13" ]]'
   assert_true '[[ "${nameLenMap[Root2]}" == " 14" ]]'
   assert_true '[[ "${nameLenMap[Root3]}" == " 15" ]]'
@@ -491,8 +491,8 @@ error
 test_costshare__charge_share_pct_get(){
 
   test_costshare__charge_share_pct_vendor_tbl
-  eval local \-\A \-\r vendorPCT=$(costshare__vendor_pct_map_create)
-  eval local \-\A \-\r vendorNameLen=$(costshare__vendor_name_length_map_create)
+  local -A -r vendorPCT=$(costshare__vendor_pct_map_create)
+  local -A -r vendorNameLen=$(costshare__vendor_name_length_map_create)
   local -i partyXpct=0
   costshare__charge_share_pct_get vendorPCT "${vendorNameLen[BJS]}" 'BJS Warehouse' partyXpct
   assert_true '[[ $partyXpct -eq 20 ]]'
@@ -520,38 +520,41 @@ costshare_vendor_pct_tbl
 
 
 test_costshare__charge_share_compute(){
+
   test_costshare__charge_share_compute_vendor_pct_tbl
+  local -A \-r vendorPCT=$(costshare__vendor_pct_map_create)
+  local -A -r vendorNameLen=$(costshare__vendor_name_length_map_create)
   assert_true '
     echo "10/10,fail vendor name,50.95"
-    | costshare__charge_share_compute 2>&1
+    | costshare__charge_share_compute vendorPCT vendorNameLen 2>&1
     | assert_output_true test_costshare__charge_share_compute_fail_vendor_name'
   assert_true '
     echo "10/10,BJS PARTYX,35.35"
-    | costshare__charge_share_compute 2>&1
+    | costshare__charge_share_compute vendorPCT vendorNameLen 2>&1
     | assert_output_true echo "10/10,BJS PARTYX,35.35,100,35.35,0.00"'
   assert_true '
     echo "10/10,BJS Warehouse,33.34"
-    | costshare__charge_share_compute 2>&1
+    | costshare__charge_share_compute vendorPCT vendorNameLen 2>&1
     | assert_output_true echo "10/10,BJS Warehouse,33.34,20,6.67,26.67"'
   assert_true '
     echo "10/10,BJS fail,33.34"
-    | costshare__charge_share_compute 2>&1
+    | costshare__charge_share_compute vendorPCT vendorNameLen 2>&1
     | assert_output_true echo "Abort: Failed to find vendorName="'"\'BJS fail\'"'" in vendor_pct_table."'
   assert_true '
     echo "10/10,BJS Warehouse,33.34,ForwardedFields"
-    | costshare__charge_share_compute 2>&1
+    | costshare__charge_share_compute vendorPCT vendorNameLen 2>&1
     | assert_output_true echo "10/10,BJS Warehouse,33.34,20,6.67,26.67,ForwardedFields"'
   assert_true '
     echo "10/10,BJS Warehouse,33.34,ForwardedFields"
-    | costshare__charge_share_compute 2>&1
+    | costshare__charge_share_compute vendorPCT vendorNameLen 2>&1
     | assert_output_true echo "10/10,BJS Warehouse,33.34,20,6.67,26.67,ForwardedFields"'
   assert_true '
     echo "10/10,BJS Warehouse,-33.34,ForwardedFields"
-    | costshare__charge_share_compute 2>&1
+    | costshare__charge_share_compute vendorPCT vendorNameLen 2>&1
     | assert_output_true echo "10/10,BJS Warehouse,-33.34,20,-6.67,-26.67,ForwardedFields"'
   assert_true '
     echo "09/03/2021,MARKET BASKET,2.19,Groceries"
-    | costshare__charge_share_compute 2>&1
+    | costshare__charge_share_compute vendorPCT vendorNameLen 2>&1
     | assert_output_true echo "09/03/2021,MARKET BASKET,2.19,29,0.64,1.55,Groceries"'
 }
 test_costshare__charge_share_compute_vendor_pct_tbl(){
@@ -586,26 +589,34 @@ test_costshare_charge_share_run(){
     return
   }
 
+  test_costshare_charge_share_run_vendor_pct_tbl_empty
+  assert_true '
+    echo "10/10,BJS Warehouse,-33.34,ForwardedFields"
+    | costshare_charge_share_run 2>&1
+    | assert_output_true echo "Abort: costshare_vendor_pct_tbl empty. please add entries to it."'
+
   test_costshare_charge_share_run_vendor_pct_tbl
   assert_true '
     echo "10/10,BJS Warehouse,-33.34,ForwardedFields"
     | costshare_charge_share_run 2>&1
     | assert_output_true echo "10/10,BJS Warehouse,-33.34,20,-6.67,-26.67,ForwardedFields"'
-
   assert_true '
     echo "10/10,BJS Ware[house,-33.34,ForwardedFields"
     | costshare_charge_share_run 2>&1
     | assert_output_false echo'
-
   assert_true '
     echo "10/10,\"BJS Warehouse\",-80.00"
     | costshare_charge_share_run 2>&1
     | assert_output_true echo "10/10,BJS Warehouse,-80.00,20,-16.00,-64.00"'
-
   assert_true '
     echo "10/10,\"BJS Warehouse\"\"\",-80.00"
     | costshare_charge_share_run 2>&1
     | assert_output_true echo "10/10,\"BJS Warehouse\"\"\",-80.00,20,-16.00,-64.00"'
+}
+test_costshare_charge_share_run_vendor_pct_tbl_empty(){
+costshare_vendor_pct_tbl(){
+return
+}
 }
 test_costshare_charge_share_run_vendor_pct_tbl(){
 costshare_vendor_pct_tbl(){
@@ -657,7 +668,12 @@ BJS WHOLESALE, 20
 costshare_vendor_pct_tbl
 }
 
- assert_true '
+costshare_vendor_pct_tbl(){
+cat <<'costshare_vendor_pct_tbl'
+BJS WHOLESALE, 20
+costshare_vendor_pct_tbl
+}
+  assert_true '
   test_costshare_purchase_vendor_csv_BJS_only_in | costshare_purchase_vendor_csv_filter 3 2>&1 \
   --- \
   | assert_output_true test_costshare_purchase_vendor_csv_BJS_only_out_expected'
@@ -693,6 +709,31 @@ cat<<'exclude_BJS_out_expected'
 exclude_BJS_out_expected
 }
 
+
+test_costshare__map_serialize(){
+
+  unset    testMap_A
+  local -A testMap_A='(["BJS WHOLESALE"]="20" )'
+  unset testMap_A_serial
+  local testMap_A_serial
+  assert_true 'costshare__map_serialize testMap_A testMap_A_serial'
+  assert_true '[[ "$testMap_A_serial" ==  '\''(["BJS WHOLESALE"]="20" )'\'' ]]'
+
+  unset    testMap_A
+  local -A testMap_A=(["BJS WHOLESALE"]="20" )
+  unset testMap_A_serial
+  local testMap_A_serial
+  assert_true 'costshare__map_serialize testMap_A testMap_A_serial'
+  assert_true '[[ "$testMap_A_serial" ==  '\''(["BJS WHOLESALE"]="20" )'\'' ]]'
+
+  unset testMap_A
+  local -A testMap_A
+  unset testMap_A_serial
+  local testMap_A_serial
+  assert_false 'costshare__map_serialize testMap_A testMap_A_serial >/dev/null 2>/dev/null'
+}
+
+
 main(){
   compose_executable "$0"
 
@@ -707,6 +748,7 @@ main(){
 
   test_costshare__error_msg
   test_costshare__embedded_whitespace_replace
+  test_costshare__map_serialize
   test_costshare__vendor_pct_tbl_norm_stream
   test_costshare__purchase_REGEX
   test_costshare__vendor_pct_map_create
