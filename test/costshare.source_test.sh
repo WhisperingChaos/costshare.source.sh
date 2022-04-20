@@ -493,6 +493,7 @@ test_costshare__charge_share_pct_get(){
   test_costshare__charge_share_pct_vendor_tbl
   local -A -r vendorPCT=$(costshare__vendor_pct_map_create)
   local -A -r vendorNameLen=$(costshare__vendor_name_length_map_create)
+
   local -i partyXpct=0
   costshare__charge_share_pct_get vendorPCT "${vendorNameLen[BJS]}" 'BJS Warehouse' partyXpct
   assert_true '[[ $partyXpct -eq 20 ]]'
@@ -503,17 +504,25 @@ test_costshare__charge_share_pct_get(){
   costshare__charge_share_pct_get vendorPCT "${vendorNameLen[BJS]}" 'BJS GasWarehouse' partyXpct
   assert_true '[[ $partyXpct -eq 50 ]]'
   partyXpct=0
-  costshare__charge_share_pct_get vendorPCT "${vendorNameLen[BJS]}" '110 Grill' partyXpct
+  costshare__charge_share_pct_get vendorPCT "${vendorNameLen[110]}" '110 Grill' partyXpct
   assert_true '[[ $partyXpct -eq 29 ]]'
+  partyXpct=0
+  costshare__charge_share_pct_get vendorPCT "${vendorNameLen[T.C.]}" "T.C. LANDO'S SUB'S &amp; PIZZ" partyXpct
+  assert_true '[[ $partyXpct -eq 31 ]]'
+  partyXpct=0
+  costshare__charge_share_pct_get vendorPCT "${vendorNameLen[T.C.]}" "T.C. LANDO''S SUB''S &amp; PIZZ" partyXpct
+  assert_true '[[ $partyXpct -eq 32 ]]'
   partyXpct=0
   assert_false 'costshare__charge_share_pct_get vendorPCT "${vendorNameLen[BJS]}" "110 Grill DC" partyXpct'
 }
 test_costshare__charge_share_pct_vendor_tbl(){
 costshare_vendor_pct_tbl(){
 cat <<'costshare_vendor_pct_tbl'
-BJS Warehouse, 20
-BJS Gas      , 50
-110 Grill    , 29
+BJS Warehouse                , 20
+BJS Gas                      , 50
+110 Grill                    , 29
+T.C. LANDO'S SUB'S &amp; PIZZ, 31
+T.C. LANDO''S SUB''S &amp; PIZZ, 32
 costshare_vendor_pct_tbl
 }
 }
@@ -522,7 +531,7 @@ costshare_vendor_pct_tbl
 test_costshare__charge_share_compute(){
 
   test_costshare__charge_share_compute_vendor_pct_tbl
-  local -A \-r vendorPCT=$(costshare__vendor_pct_map_create)
+  local -A -r vendorPCT=$(costshare__vendor_pct_map_create)
   local -A -r vendorNameLen=$(costshare__vendor_name_length_map_create)
   assert_true '
     echo "10/10,fail vendor name,50.95"

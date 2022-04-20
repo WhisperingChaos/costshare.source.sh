@@ -967,6 +967,10 @@ costshare__map_serialize(){
     # this running Bash version doesn't encapuslate using single quotes
     return
   fi
+  # see Note# 4 at the end of this module
+  local -r singleQuoteEscape="\'\\\'\'"
+  local -r singleQuote="'"
+  serializedPtr=${serializedPtr//$singleQuoteEscape/$singleQuote}
   # remove encapsulating single quotes
   serializedPtr=${serializedPtr:1}
   serializedPtr=${serializedPtr:0:${#serializedPtr}-1}
@@ -975,7 +979,7 @@ costshare__map_serialize(){
 #
 # Notes:
 #
-#  1.  In older Bash versions, prior at least 5.0, the serialized map
+#  1.  In older Bash versions, prior at least to 5.0, the serialized map
 #      definition was encapsulated in single quotes.  This encapsulation 
 #      technique prevented using the direct assignment of the serialized 
 #      value to a variable.  However, the use of eval as in "eval local..."
@@ -999,7 +1003,7 @@ costshare__map_serialize(){
 #      failure by affecting assignment's return code, unfortunately, this
 #      decoupled assignment fails to treat the variable as an associative array.
 #      Instead, the variable is considered a standard array, when more
-#      than one keyvalue pair is specified, even though the right side of the 
+#      than one key-value pair is specified, even though the right side of the 
 #      assignment specifies the serialized format of an associative array.
 #
 #      Given the confluence of behaviors above, perhaps the most reliable method
@@ -1011,4 +1015,13 @@ costshare__map_serialize(){
 #  3.  Another bash difference between versions 4.3 and at least 5.0, a declared
 #      but unassigned associative array variable will cause typeset -p to generate
 #      an error in bash 4.3.  However, in at least 5.0, instead of an error, 5.0
-#      produces only a declaration without and assignment.         
+#      produces only a declaration without an assignment.
+#
+#  4.  Encapsulating a serialized map using a single quote ('), as mentioned in
+#      Note: 1, resulted in another issue when a key or value themselves incorporate
+#      a single quote (').  In this situation, the embedded single quote must be
+#      escaped using the following sequence ('\'').  However, this sequence
+#      can be reduced to just a single quote (') if the outermost enclosing 
+#      single quotes are removed because all key-value pairs are encapsulated
+#      in double quotes (") and a single quote character within a double quoted
+#      string has no special significance.
