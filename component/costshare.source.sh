@@ -35,7 +35,7 @@
 ##    Filtering selects only those purchases whose Vendor Names appear in
 ##    this table.  A "grep" "fixed string" comparision is performed between
 ##    each Vendor Name in this table and the one appearing in a purchase.  If
-##    the fixed string comparison succeeds the purchase is selected for 
+##    the fixed string comparison succeeds, the purchase is selected for 
 ##    further processing.  Note, fixed string evaluation compares all characters
 ##    according to their character values, therefore, a character's case
 ##    affects the comparison outcome and regular expressions are unsupported.
@@ -68,6 +68,8 @@
 ##    - The share paid by Party 'Y' is the amount that remains after deducting
 ##      the amount owed by Party 'X'.
 ##    - Must be a whole number that ranges: 0-100.
+##  Out
+##    STDOUT - The streamed contents of the vendor percentage table.
 ##
 ###############################################################################
 costshare_vendor_pct_tbl(){
@@ -216,6 +218,8 @@ costshare_purchase_vendor_csv_filter(){
 ##    specifing an empty value using a pair of double quotes ("").  If an
 ##    empty value is specified, a comma must terminate the field if a value
 ##    is specified for a subsequent field.
+##  Out
+##    STDOUT - The streamed contents of excluded purchase's table.
 ##
 ###############################################################################
 costshare_purchase_exclude_filter_tbl(){
