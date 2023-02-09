@@ -732,7 +732,7 @@ costshare__purchase_stream_normalize(){
     # any fields after the required ones are optional.  since they might not exist
     # (re)set the remainder field to empty string.
     eval $csv_field_REMAINDER=\'\'
-    if ! csv_field_get "$purchase" unsetFieldCnt purchaseDate vendorName charge $csv_field_REMAINDER 2>/dev/null; then
+    if ! csv_field_get "$purchase" unsetFieldCnt purchaseDate vendorName charge csv_field_REMAINDER 2>/dev/null; then
       costshare__error_msg errorCnt "purchase" "$purchaseCnt" "$purchase" "does not comply with basic CSV format."
       continue
     fi
@@ -775,7 +775,7 @@ costshare__purchase_stream_normalize(){
       continue
     fi
 
-    eval forwardFields\=\"\$$csv_field_REMAINDER\"
+    forwardFields=${!csv_field_REMAINDER}
     if [[ -n "$forwardFields" ]]; then
       # forwarded fields must be prefixed by
       # comma to maintain CSV spec for charge field.
@@ -829,7 +829,7 @@ costshare__charge_share_compute(){
     # any fields after the required ones are optional.  since they might not exist
     # (re)set the remainder field to empty string.
     eval $csv_field_REMAINDER=\'\'
-    if ! csv_field_get "$purchase" unsetFieldCnt purchaseDate vendorName charge $csv_field_REMAINDER 2>/dev/null; then
+    if ! csv_field_get "$purchase" unsetFieldCnt purchaseDate vendorName charge csv_field_REMAINDER 2>/dev/null; then
       costshare__fatal 'Purchase data fails basic CSV spec. purchase='"'""$purchase""'"
     fi
     
@@ -857,7 +857,7 @@ costshare__charge_share_compute(){
       costshare__fatal "Failed to compute proper share amounts for purchase='$purchase' sharePartyXRound=$sharePartyXRound  sharePartyY=$sharePartyY checkCharge=$checkCharge"
     fi
 
-    eval forwardFields\=\"\$$csv_field_REMAINDER\"
+    forwardFields=${!csv_field_REMAINDER}
     if [[ -n "$forwardFields" ]]; then
       # forwarded fields must be prefixed by
       # comma to maintain CSV spec for charge field.
