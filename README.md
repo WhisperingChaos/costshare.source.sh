@@ -4,7 +4,7 @@
 A [component](https://github.com/WhisperingChaos/SOLID_Bash#component-composition) that consumes: 
 - a required CSV formated stream of purchases/refunds and
 - a required vendor table in CSV format which defines one or more rows containing a vendor name and the percentage to be paid by one of the parties and
-- an optional purchase exclusionary table which discards one or more specific pruchases that would otherwize be included by the vendor table.
+- an optional purchase exclusionary table which discards one or more specific pruchases that would otherwise be included by the vendor table.
 
 Given these inputs, the component will apportion a purchase's cost/reimbursement between two parties.
 ## ToC
